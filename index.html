@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carrier Data Base</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://alcdn.msauth.net/browser/3.18.0/js/msal-browser.min.js"></script>
+<style>
+  :root{
+    --bg:#0a141f; --panel:#0f1d2c; --panel-alt:#132638; --border:#22384c;
+    --text:#e8f0f6; --text-dim:#7f95a8;
+    --echo-navy:#051940; --echo-navy2:#082359; --echo-green:#3ea60d; --echo-green2:#7abf5a; --echo-fog:#f2f2f2;
+    --op-nacional:#1e88e5; --op-crossborder:#ff6a13; --op-intraus:#2fbf88; --op-directo:#ffb347;
+    --op-directo-cb:#c25bff; --op-directo-iu:#ff5d8f;
+    font-family: -apple-system, "Segoe UI", "IBM Plex Sans", Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--text);overflow:hidden;}
+  #app{display:flex;flex-direction:column;height:100vh;}
+
+  #topbar{display:flex;align-items:center;gap:18px;padding:12px 22px;background:var(--panel);
+    border-bottom:1px solid var(--border);position:relative;z-index:30;flex-shrink:0;flex-wrap:wrap;}
+  #topbar::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:3px;
+    background:linear-gradient(90deg, var(--echo-navy) 0%, var(--echo-green) 100%);opacity:.9;}
+  #logo{display:flex;align-items:center;gap:9px;}
+  #logoMark{height:34px;display:flex;align-items:center;cursor:pointer;flex-shrink:0;padding:4px 6px;
+    border-radius:8px;background:#ffffff;}
+  #logoMark img{height:26px;display:block;}
+  .brand{display:flex;flex-direction:column;line-height:1.05;}
+  .brand .eyebrow{font-size:9.5px;letter-spacing:.2em;color:var(--echo-green);text-transform:uppercase;font-weight:800;}
+  .brand h1{font-size:18px;margin:2px 0 0;font-weight:800;}
+  .statrow{display:flex;gap:0;}
+  .stat{display:flex;flex-direction:column;padding:0 13px;border-left:1px solid var(--border);}
+  .stat .n{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums;}
+  .stat .l{font-size:9px;color:var(--text-dim);letter-spacing:.06em;text-transform:uppercase;margin-top:2px;}
+  #topbar-spacer{flex:1;}
+  .pagenav{display:flex;background:var(--panel-alt);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
+  .pagenav button{border:none;background:transparent;color:var(--text-dim);padding:9px 15px;font-size:12px;
+    font-weight:700;cursor:pointer;}
+  .pagenav button.active{background:var(--echo-navy);color:#fff;}
+  #syncStatus{font-size:10px;color:var(--text-dim);display:flex;align-items:center;gap:6px;}
+  #syncDot{width:7px;height:7px;border-radius:50%;background:#5a6b7c;}
+  #syncDot.on{background:#2fbf88;} #syncDot.err{background:#e6462e;}
+
+  .page{display:none;flex:1;min-height:0;}
+  .page.active{display:flex;}
+
+  /* ===== MAPA page ===== */
+  #sidebar{width:380px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--border);
+    display:flex;flex-direction:column;min-height:0;}
+  .tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;}
+  .tabs button{flex:1;padding:11px 0;background:transparent;border:none;color:var(--text-dim);
+    font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;
+    border-bottom:2px solid transparent;}
+  .tabs button.active{color:var(--text);border-bottom-color:var(--echo-green);}
+  .tabpanel{display:none;flex-direction:column;min-height:0;flex:1;}
+  .tabpanel.active{display:flex;}
+
+  #filters{padding:12px 18px 9px;border-bottom:1px dashed #1c3145;flex-shrink:0;}
+  #searchbox{width:100%;background:var(--panel-alt);border:1px solid var(--border);color:var(--text);
+    padding:9px 11px;border-radius:7px;font-size:13px;margin-bottom:8px;}
+  .filtergrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .filtergrid select{background:var(--panel-alt);border:1px solid var(--border);color:var(--text);
+    padding:7px 8px;border-radius:6px;font-size:11px;width:100%;min-width:0;}
+
+  #carrierList{flex:1;overflow-y:auto;padding:6px 10px 16px;}
+  .card{background:var(--panel-alt);border:1px solid var(--border);border-left:3px solid var(--op-directo);
+    border-radius:8px;padding:10px 12px;margin:7px 3px;cursor:pointer;}
+  .card:hover{border-color:var(--echo-green);}
+  .card .top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+  .card .name{font-size:12.5px;font-weight:700;line-height:1.3;}
+  .card .tag{font-size:8.5px;padding:2px 6px;border-radius:100px;font-weight:800;white-space:nowrap;color:#0a141f;}
+  .card .loc{font-size:10.5px;color:var(--text-dim);margin-top:4px;}
+  .card .tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+  .card .zonetag{font-size:8.5px;padding:2px 6px;border-radius:5px;background:#1c3145;color:#a9c1d4;}
+  .card .meta{display:flex;justify-content:space-between;align-items:center;margin-top:7px;font-size:10px;color:var(--text-dim);}
+  .card .del{background:transparent;border:none;color:var(--text-dim);cursor:pointer;font-size:13px;}
+  .card .del:hover{color:#ff6b6b;}
+  #emptyMsg{padding:30px 20px;text-align:center;color:var(--text-dim);font-size:12px;line-height:1.6;display:none;}
+
+  #addForm, #configPane{padding:16px;overflow-y:auto;flex:1;}
+  .sectionlabel{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--echo-green);
+    margin:18px 0 8px;}
+  .sectionlabel:first-child{margin-top:0;}
+  .field{margin-bottom:12px;}
+  .field label{display:block;font-size:10.5px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;font-weight:700;}
+  .field label .req{color:var(--echo-green);}
+  .field input, .field select, .field textarea{width:100%;background:var(--panel-alt);border:1px solid var(--border);
+    color:var(--text);padding:9px 10px;border-radius:7px;font-size:13px;font-family:inherit;}
+  .field textarea{resize:vertical;min-height:50px;}
+  .fieldrow{display:flex;gap:10px;}
+  .fieldrow .field{flex:1;}
+
+  /* multiselect combobox */
+  .msel{position:relative;}
+  .msel-chips{display:flex;flex-wrap:wrap;gap:5px;min-height:38px;background:var(--panel-alt);border:1px solid var(--border);
+    border-radius:7px;padding:6px 8px;cursor:text;}
+  .msel-chip{background:var(--echo-navy2);color:#fff;font-size:10.5px;padding:3px 7px;border-radius:5px;display:flex;align-items:center;gap:5px;}
+  .msel-chip span{cursor:pointer;font-weight:800;}
+  .msel-input{border:none;background:transparent;outline:none;color:var(--text);font-size:12px;flex:1;min-width:60px;}
+  .msel-panel{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#152941;border:1px solid var(--border);
+    border-radius:8px;max-height:200px;overflow-y:auto;z-index:50;display:none;box-shadow:0 8px 20px rgba(0,0,0,.4);}
+  .msel-panel.open{display:block;}
+  .msel-panel label.msel-opt{padding:9px 11px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:10px;color:var(--text);text-transform:none;letter-spacing:normal;margin-bottom:0;}
+  .msel-opt:hover{background:#1c3145;}
+  .msel-opt .cb-wrap{width:16px;height:16px;flex:0 0 16px;display:flex;align-items:center;justify-content:center;}
+  .msel-opt input[type="checkbox"]{
+    appearance:none; -webkit-appearance:none; width:16px;height:16px;margin:0;padding:0;display:block;
+    border:1.5px solid var(--border); border-radius:4px; background:var(--panel-alt); cursor:pointer; position:relative;
+  }
+  .msel-opt input[type="checkbox"]:checked{background:var(--echo-green); border-color:var(--echo-green);}
+  .msel-opt input[type="checkbox"]:checked::after{
+    content:""; position:absolute; left:5px; top:2px; width:3px; height:7px;
+    border:solid #051940; border-width:0 2px 2px 0; transform:rotate(45deg);
+  }
+  .msel-opt .opt-label{flex:1;text-align:left;line-height:1.3;}
+
+  .contactblock{border:1px dashed var(--border);border-radius:8px;padding:10px;margin-bottom:10px;}
+  #addContactBtn, #addEquipoBtn{width:100%;padding:8px;border-radius:7px;border:1px dashed var(--border);background:transparent;
+    color:var(--text-dim);font-size:11.5px;font-weight:700;cursor:pointer;margin-bottom:14px;}
+  #addContactBtn:hover, #addEquipoBtn:hover{color:var(--echo-green);border-color:var(--echo-green);}
+
+  #submitBtn, .primaryBtn{width:100%;padding:12px;border-radius:7px;border:none;background:var(--echo-green);
+    color:#ffffff;font-size:13px;font-weight:800;cursor:pointer;margin-top:6px;}
+  #formMsg{font-size:11px;color:var(--echo-green);margin-top:8px;min-height:14px;}
+
+  .confighelp{font-size:11px;color:var(--text-dim);line-height:1.6;margin-bottom:16px;padding:12px;
+    background:var(--panel-alt);border-radius:8px;border:1px dashed var(--border);}
+  .confighelp b{color:var(--text);}
+  .confighelp ol{margin:6px 0 0;padding-left:18px;}
+  .secondaryBtn{width:100%;padding:9px;border-radius:7px;border:1px solid var(--border);background:transparent;
+    color:var(--text-dim);font-size:12px;font-weight:700;cursor:pointer;margin-top:8px;}
+  .secondaryBtn:hover{color:var(--echo-green);border-color:var(--echo-green);}
+
+  #mapwrap{flex:1;position:relative;min-width:0;}
+  #map{position:absolute;inset:0;background:#0a141f;}
+  .leaflet-container{background:#0a141f;}
+  .leaflet-tile-pane{filter:invert(100%) hue-rotate(180deg) brightness(0.95) contrast(0.9);}
+  .state-label-icon{pointer-events:none;}
+  .state-label-icon span{
+    color:#8f8f8f;font-size:8.5px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;
+    text-shadow:0 0 4px #0a141f, 0 0 4px #0a141f, 0 0 6px #0a141f;white-space:nowrap;
+    display:inline-block;transform:translate(-50%,-50%);
+  }
+
+  #legend{position:absolute;bottom:18px;left:18px;z-index:400;background:rgba(15,29,44,.94);
+    border:1px solid var(--border);border-radius:9px;padding:12px 14px;font-size:10.5px;min-width:170px;}
+  #legend .lt{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);font-weight:700;margin-bottom:8px;}
+  #legend .row{display:flex;align-items:center;gap:8px;margin-bottom:5px;}
+  #legend .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+
+  #rankPanel{position:absolute;top:16px;right:16px;z-index:400;width:260px;background:rgba(15,29,44,.96);
+    border:1px solid var(--border);border-radius:10px;padding:14px;max-height:78%;overflow-y:auto;}
+  #rankPanel .rt{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);font-weight:700;
+    margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
+  #rankPanel .rt span.close{cursor:pointer;color:var(--text-dim);font-size:14px;}
+  .rankrow{margin-bottom:9px;}
+  .rankrow .rl{display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;}
+  .rankrow .rl b{font-weight:700;}
+  .rankrow .rbar{height:6px;border-radius:4px;background:var(--panel-alt);overflow:hidden;}
+  .rankrow .rbar i{display:block;height:100%;border-radius:4px;background:var(--echo-green);}
+  #rankToggle{position:absolute;top:16px;right:16px;z-index:400;background:var(--panel);border:1px solid var(--border);
+    color:var(--text-dim);padding:9px 13px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;}
+  #rankToggle:hover{color:var(--echo-green);border-color:var(--echo-green);}
+  #selectionBanner{position:absolute;top:16px;left:16px;z-index:400;display:none;align-items:center;gap:10px;
+    background:var(--echo-navy2);border:1px solid var(--echo-green);color:#fff;padding:9px 14px;border-radius:8px;
+    font-size:12px;font-weight:700;}
+  #selectionBanner button{background:transparent;border:none;color:#fff;cursor:pointer;font-size:15px;font-weight:800;padding:0;}
+  .card.selected{border-color:var(--echo-green);box-shadow:0 0 0 1px var(--echo-green);}
+
+  .leaflet-popup-content-wrapper{background:var(--panel);color:var(--text);border-radius:8px;}
+  .leaflet-popup-tip{background:var(--panel);}
+  .popup h4{margin:0 0 4px;font-size:13px;}
+  .popup .ptag{font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:100px;color:#0a141f;display:inline-block;margin-bottom:6px;}
+  .popup p{margin:2px 0;font-size:11px;color:#c3d2de;}
+  .popup .zones{margin-top:4px;}
+  .popup .zonetag{display:inline-block;font-size:8.5px;padding:2px 6px;border-radius:5px;background:#1c3145;color:#a9c1d4;margin:2px 3px 0 0;}
+
+  /* ===== Zonas page ===== */
+  #zonesPage{flex-direction:column;padding:26px 34px;overflow-y:auto;width:100%;}
+  #zonesPage h2{margin:0 0 4px;font-size:20px;}
+  #zonesPage .sub{color:var(--text-dim);font-size:12.5px;margin-bottom:20px;}
+  .zonegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;}
+  .zone-banner{width:100%;background:linear-gradient(90deg,var(--echo-navy),var(--echo-navy2) 55%,var(--echo-green));color:#fff;text-align:center;
+    font-weight:800;font-size:15px;letter-spacing:.12em;text-transform:uppercase;padding:14px;
+    border-radius:8px;margin:22px 0 16px;border:1px solid var(--border);}
+  .zone-banner:first-child{margin-top:0;}
+  .zonecard{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;border-top:3px solid var(--echo-green);}
+  .zonecard h3{margin:0 0 3px;font-size:14.5px;}
+  .zonecard .zid{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;}
+  .zonecard .members{display:flex;flex-wrap:wrap;gap:5px;}
+  .zonecard .m{font-size:10.5px;background:var(--panel-alt);border:1px solid var(--border);padding:3px 8px;border-radius:100px;color:#c3d2de;}
+
+  /* ===== Perfiles page ===== */
+  #profilesPage{display:flex;flex-direction:column;width:100%;height:100%;overflow:hidden;}
+  #profilesSearch{padding:18px 34px 12px;flex-shrink:0;border-bottom:1px solid var(--border);}
+  #profilesSearch input{width:100%;max-width:480px;background:var(--panel-alt);border:1px solid var(--border);
+    color:var(--text);padding:11px 14px;border-radius:8px;font-size:14px;}
+  #profilesList{flex:1;overflow-y:auto;padding:20px 34px;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;align-content:start;}
+  .profcard{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;}
+  .profcard h3{margin:0 0 2px;font-size:14.5px;}
+  .profcard .ptag{font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:100px;color:#0a141f;display:inline-block;margin:6px 0;}
+  .profcard p{margin:3px 0;font-size:11.5px;color:#c3d2de;}
+  .profcard .zones{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;}
+
+  #toast{position:fixed;top:24px;left:50%;transform:translateX(-50%) translateY(-20px);z-index:2000;
+    padding:14px 22px;border-radius:9px;font-size:13px;font-weight:700;color:#fff;
+    box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .25s, transform .25s;
+    max-width:80%;text-align:center;}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  #toast.success{background:var(--echo-green);}
+  #toast.error{background:#c0392b;}
+  #loginGateOverlay{position:fixed;inset:0;background:rgba(5,10,16,.85);z-index:1000;display:none;
+    align-items:center;justify-content:center;}
+  #loginGateOverlay.show{display:flex;}
+  #adminGateBox{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:26px;width:300px;}
+  #adminGateBox h3{margin:0 0 4px;font-size:15px;}
+  #adminGateBox p{font-size:11.5px;color:var(--text-dim);margin:0 0 14px;}
+  #adminGateBox input{width:100%;background:var(--panel-alt);border:1px solid var(--border);color:var(--text);
+    padding:9px 10px;border-radius:7px;font-size:13px;margin-bottom:10px;}
+
+  ::-webkit-scrollbar{width:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:8px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div id="logo">
+      <div id="logoMark" ><img src="data:image/png;base64,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" alt="Echo Global Logistics"></div>
+      <div class="brand">
+        <div class="eyebrow">Echo Global Logistics</div>
+        <h1>Carrier Data Base</h1>
+      </div>
+    </div>
+    <div class="statrow">
+      <div class="stat"><span class="n" id="statTotal">0</span><span class="l">Total</span></div>
+      <div class="stat"><span class="n" id="statMx">0</span><span class="l">MX</span></div>
+      <div class="stat"><span class="n" id="statUs">0</span><span class="l">US</span></div>
+      <div class="stat"><span class="n" id="statCrossdock">0</span><span class="l">Crossdock</span></div>
+    </div>
+    <div id="topbar-spacer"></div>
+    <div id="syncStatus"><span id="syncDot"></span><span id="syncLabel">Sin iniciar sesión</span></div>
+    <div class="pagenav">
+      <button id="navMapa" class="active">Mapa</button>
+      <button id="navZonas">Zonas</button>
+      <button id="navPerfiles">Perfiles</button>
+    </div>
+  </div>
+
+  <div id="pageMapa" class="page active">
+    <div id="sidebar">
+      <div class="tabs">
+        <button id="tabListBtn" class="active">Lista</button>
+        <button id="tabAddBtn">Agregar</button>
+      </div>
+
+      <div id="tabList" class="tabpanel active">
+        <div id="filters">
+          <input id="searchbox" placeholder="Buscar por nombre, L#, contacto…">
+          <div class="filtergrid">
+            <select id="operacionFilter"><option value="">Transportista (todas)</option></select>
+            <select id="zoneFilter"><option value="">Zona (todas)</option></select>
+            <select id="hazmatFilter">
+              <option value="">Hazmat (todos)</option>
+              <option value="SI">SI</option><option value="NO">NO</option>
+              <option value="SI (SOLO EN MX)">SI (SOLO EN MX)</option>
+              <option value="SI (SOLO EN US)">SI (SOLO EN US)</option>
+            </select>
+            <select id="terminalFilter"><option value="">Terminal (todas)</option></select>
+            <select id="equipoFilter"><option value="">Equipo (todos)</option></select>
+            <select id="fronteraFilter"><option value="">Frontera (todas)</option></select>
+          </div>
+        </div>
+        <div id="carrierList"></div>
+        <div id="emptyMsg">Sin resultados con esos filtros.</div>
+      </div>
+
+      <div id="tabAdd" class="tabpanel">
+        <div id="addForm"></div>
+      </div>
+    </div>
+
+    <div id="mapwrap">
+      <div id="map"></div>
+      <button id="rankToggle">📊 Densidad por zona</button>
+      <div id="rankPanel" style="display:none;">
+        <div class="rt"><span>Cobertura por zona</span><span class="close" id="rankClose">✕</span></div>
+        <div id="rankList"></div>
+      </div>
+      <div id="selectionBanner"><span id="selectionLabel"></span><button id="selectionClear">✕</button></div>
+      <div id="legend"></div>
+    </div>
+  </div>
+
+  <div id="pageZonas" class="page">
+    <div id="zonesPage">
+      <h2>Zonas</h2>
+      <div class="sub">Agrupación de estados/provincias usada para "Cobertura MX" y "Cobertura US".</div>
+      <div id="zonesContent"></div>
+    </div>
+  </div>
+
+  <div id="pagePerfiles" class="page">
+    <div id="profilesPage">
+      <div id="profilesSearch"><input id="profSearch" placeholder="Buscar transportista por nombre, L#, contacto, terminal…"></div>
+      <div id="profilesList"></div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+  <div id="loginGateOverlay" class="show">
+    <div id="adminGateBox">
+      <h3>Carrier Data Base</h3>
+      <p>Inicia sesión con tu cuenta de Echo Global Logistics para ver y agregar transportistas.</p>
+      <button class="primaryBtn" id="msLoginBtn">Iniciar sesión con Microsoft</button>
+      <div id="loginMsg" style="font-size:11px;color:#ff6b6b;margin-top:10px;min-height:14px;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============ reference data ============ */
+const ZONES = [{"id": "Zona 1", "label": "Zona Norte", "lat": 25.68, "lng": -100.31, "members": ["Monterrey", "Saltillo", "Ramos Arizpe", "Torreón", "Gómez Palacio, Durango", "Lerdo", "Monclova"]}, {"id": "Zona 2", "label": "Bajío", "lat": 20.85, "lng": -101.3, "members": ["San Luis Potosí", "San José Iturbide", "Santiago de Querétaro", "León", "Irapuato", "Celaya", "Salamanca", "Guadalajara", "San Juan del Río", "Aguascalientes", "Zacatecas"]}, {"id": "Zona 3", "label": "México Centro", "lat": 19.43, "lng": -99.13, "members": ["Toluca", "Atlacomulco", "Mexico City", "Cuernavaca", "Pachuca"]}, {"id": "Zona 4", "label": "México Centro Sur", "lat": 19.04, "lng": -98.2, "members": ["Puebla", "Tlaxcala", "Tehuacán", "Orizaba", "Córdoba", "Veracruz", "Cuitláhuac"]}, {"id": "Zona 5", "label": "Tijuana", "lat": 32.53, "lng": -117.02, "members": ["Tijuana", "Ensenada", "Rosarito Beach", "Mexicali"]}, {"id": "Zona 6", "label": "Chihuahua", "lat": 28.63, "lng": -106.07, "members": ["Chihuahua", "Delicias", "Ciudad Juárez"]}, {"id": "Zona 7", "label": "West", "lat": 39.5, "lng": -111.5, "members": ["Washington", "Oregon", "California", "Montana", "Idaho", "Nevada", "Utah", "Arizona", "Colorado", "Wyoming", "New Mexico", "North Dakota", "South Dakota", "Nebraska", "Kansas", "Missouri", "Iowa", "Minnesota"]}, {"id": "Zona 8", "label": "Midwest", "lat": 41.88, "lng": -87.63, "members": ["Wisconsin", "Illinois", "Michigan", "Indiana", "Ohio", "Kentucky"]}, {"id": "Zona 9", "label": "South Central", "lat": 32.78, "lng": -96.8, "members": ["Texas", "Oklahoma", "Louisiana", "Arkansas", "Misissipi"]}, {"id": "Zona 10", "label": "Northeast", "lat": 40.71, "lng": -74.0, "members": ["Maryland", "Delaware", "Washington D.C", "Pennsylvania", "New York", "New Jersey", "Connecticut", "Rhode Island", "Massachusets", "Vermont", "New Hempshire", "Maine", "Florida", "North Carolina", "South Carolina", "Virgina", "West Virginia", "Alabama", "Tennesse", "Georgia"]}, {"id": "Zona 11", "label": "Canadá", "lat": 43.65, "lng": -79.38, "members": ["British Colombia", "Alberta", "Manitoba", "Saskatchewan", "Ontario", "Quebec"]}];
+const ZONE_BY_ID = Object.fromEntries(ZONES.map(z=>[z.id,z]));
+const TERMINAL_COORDS = {"AGUASCALIENTES": [21.88, -102.3], "BAJA CALIFORNIA": [30.84, -115.28], "BAJA CALIFORNIA SUR": [25.57, -111.55], "CAMPECHE": [19.51, -90.3], "CHIAPAS": [16.75, -93.12], "CHIHUAHUA": [28.63, -106.07], "CIUDAD DE MÉXICO": [19.43, -99.13], "COAHUILA": [27.3, -101.55], "COLIMA": [19.24, -103.72], "DURANGO": [24.02, -104.65], "GUANAJUATO": [21.02, -101.26], "GUERRERO": [17.55, -99.5], "HIDALGO": [20.09, -98.76], "JALISCO": [20.66, -103.35], "ESTADO DE MÉXICO": [19.29, -99.65], "MICHOACÁN": [19.7, -101.19], "MORELOS": [18.68, -99.1], "NAYARIT": [21.75, -104.85], "NUEVO LEÓN": [25.59, -99.99], "OAXACA": [17.06, -96.72], "PUEBLA": [19.04, -98.2], "QUERÉTARO": [20.59, -100.39], "QUINTANA ROO": [19.6, -88.1], "SAN LUIS POTOSÍ": [22.15, -100.98], "SINALOA": [24.8, -107.39], "SONORA": [29.07, -110.96], "TABASCO": [17.99, -92.93], "TAMAULIPAS": [24.27, -98.84], "TLAXCALA": [19.32, -98.24], "VERACRUZ": [19.17, -96.13], "YUCATÁN": [20.97, -89.62], "ZACATECAS": [22.77, -102.58], "ALTAMIRA": [22.4, -97.93], "NUEVO LAREDO": [27.453, -99.5076], "LAREDO": [27.5064, -99.5075], "MONTERREY": [25.6866, -100.3161], "DALLAS": [32.7767, -96.797], "TOLUCA": [19.2926, -99.6557], "EAGLE PASS": [28.7091, -100.4995], "ALABAMA": [32.81, -86.79], "ALASKA": [61.37, -152.4], "ARIZONA": [33.73, -111.43], "ARKANSAS": [34.97, -92.37], "CALIFORNIA": [36.12, -119.68], "COLORADO": [39.06, -105.31], "CONNECTICUT": [41.6, -72.76], "DELAWARE": [39.32, -75.51], "FLORIDA": [27.77, -81.69], "GEORGIA": [33.04, -83.64], "HAWAII": [21.09, -157.5], "IDAHO": [44.24, -114.48], "ILLINOIS": [40.35, -88.99], "INDIANA": [39.85, -86.26], "IOWA": [42.01, -93.21], "KANSAS": [38.53, -96.73], "KENTUCKY": [37.67, -84.67], "LOUISIANA": [31.17, -91.87], "MAINE": [44.69, -69.38], "MARYLAND": [39.06, -76.8], "MASSACHUSETTS": [42.23, -71.53], "MICHIGAN": [43.33, -84.54], "MINNESOTA": [45.69, -93.9], "MISSISSIPPI": [32.74, -89.68], "MISSOURI": [38.46, -92.3], "MONTANA": [46.92, -110.45], "NEBRASKA": [41.13, -98.27], "NEVADA": [38.31, -117.05], "NEW HAMPSHIRE": [43.45, -71.56], "NEW JERSEY": [40.3, -74.52], "NEW MEXICO": [34.84, -106.25], "NEW YORK": [42.17, -74.95], "NORTH CAROLINA": [35.63, -79.81], "NORTH DAKOTA": [47.53, -99.78], "OHIO": [40.39, -82.76], "OKLAHOMA": [35.57, -96.93], "OREGON": [43.8, -120.55], "PENNSYLVANIA": [40.59, -77.21], "RHODE ISLAND": [41.68, -71.51], "SOUTH CAROLINA": [33.86, -80.95], "SOUTH DAKOTA": [44.3, -99.44], "TENNESSEE": [35.75, -86.69], "TEXAS": [31.05, -97.56], "UTAH": [40.15, -111.86], "VERMONT": [44.05, -72.71], "VIRGINIA": [37.77, -78.17], "WASHINGTON": [47.4, -121.49], "WEST VIRGINIA": [38.6, -80.45], "WISCONSIN": [43.78, -88.79], "WYOMING": [43.08, -107.29], "ALBERTA": [53.93, -116.58], "BRITISH COLUMBIA": [53.73, -127.65], "MANITOBA": [53.76, -98.81], "NEW BRUNSWICK": [46.57, -66.46], "NEWFOUNDLAND AND LABRADOR": [53.14, -57.66], "NOVA SCOTIA": [44.68, -63.74], "ONTARIO": [51.25, -85.32], "PRINCE EDWARD ISLAND": [46.51, -63.42], "QUEBEC": [52.94, -73.55], "SASKATCHEWAN": [52.94, -106.45], "NORTHWEST TERRITORIES": [64.83, -124.85], "NUNAVUT": [70.3, -83.11], "YUKON": [64.28, -135.0]};
+
+const OPERACIONES = ["MX","US","CROSSDOCK"];
+const OP_COLORS = {
+  "MX":"#e0621a","US":"#2f6fb8","CROSSDOCK":"#3ea60d"
+};
+const OP_TEXT_COLORS = {
+  "MX":"#ffffff","US":"#ffffff","CROSSDOCK":"#ffffff"
+};
+function opTextColor(ops){ return OP_TEXT_COLORS[(ops&&ops[0])||''] || "#ffffff"; }
+const EQUIPOS = ["CAJA SECA","REFRIGERADO","RABON","THORTON","EQUIPO CHICO","PLATAFORMA"];
+const FRONTERAS = ["SAN DIEGO – TIJUANA","CALEXICO – MEXICALI","NOGALES","DOUGLAS – AGUA PRIETA",
+  "EL PASO – CIUDAD JUÁREZ","PRESIDIO – OJINAGA","DEL RIO – CIUDAD ACUÑA","EAGLE PASS – PIEDRAS NEGRAS",
+  "LAREDO – NUEVO LAREDO","MCALLEN – REYNOSA","BROWNSVILLE – MATAMOROS","PHARR – REYNOSA"];
+const CHOFERES_OPTS = ["B1","CDL","B1/CDL"];
+const TERMINALES_OPTS = Object.keys(TERMINAL_COORDS);
+const ZONA_MX_OPTS = ZONES.filter(z=>["Zona 1","Zona 2","Zona 3","Zona 4","Zona 5","Zona 6"].includes(z.id));
+const ZONA_US_OPTS = ZONES.filter(z=>["Zona 7","Zona 8","Zona 9","Zona 10","Zona 11"].includes(z.id));
+const SI_NO = ["Sí","No"];
+const HAZMAT_OPTS = ["SI","NO","SI (SOLO EN MX)","SI (SOLO EN US)"];
+
+let carriers = [{"id": "L213918", "name": "3T CARRIER LLC", "operaciones": ["DIRECTO"], "equipo": ["CAJA SECA", "PLATAFORMA"], "contactos": [{"nombre": "DANIEL RUVALCABA", "telefono": "", "posicion": "", "email": "daniel@thrinternational.net"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["NUEVO LEÓN", "NUEVO LAREDO", "LAREDO"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L236609", "name": "ABC AUTOLINEAS", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA", "RABON"], "contactos": [{"nombre": "NUEVA PERSONA", "telefono": "844 350 3196", "posicion": "REPRESENTANTE COMERCIAL", "email": ""}, {"nombre": "JOSE LUIS PERALES", "telefono": "844 179 9848", "posicion": "GERENTE OPERACIONES", "email": "joseluis@ximple.mx"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["MONTERREY", "NUEVO LAREDO", "LAREDO"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2"], "cobertura_us": ["Zona 9", "Zona 10", "Zona 8"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L112312", "name": "ANGELES TRANSPORTATION SERVICES INC", "operaciones": ["DIRECTO"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "ALEJANDRO TOVAR", "telefono": "442 479 4706", "posicion": "REPRESENTANTE COMERCIAL", "email": "salesmx@angeles-ts.com"}, {"nombre": "ALDO VASQUEZ GONZALEZ", "telefono": "956 740 9080", "posicion": "DUEÑO", "email": "aldo@angeles-ts.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["LAREDO"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": ["Zona 9", "Zona 10", "Zona 8"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L234647", "name": "AUTO EXPRESS FRONTERA NORTE", "operaciones": ["CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "MIRIAM PADILLA", "telefono": "722 715 7394", "posicion": "GERENTE COMERCIAL", "email": "miriam.padilla@afn.com.mx"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["MONTERREY", "ESTADO DE MÉXICO", "PUEBLA", "VERACRUZ"], "choferes": [], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": [], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "SI", "hazmat": "SI", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L235426", "name": "MOVE", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "LUIS HERNANDEZ", "telefono": "844 160 5152", "posicion": "GERENTE COMERCIAL", "email": "ventas@grupoomega.com.mx"}, {"nombre": "MARTIN GARZA", "telefono": "81 1801 4703", "posicion": "TRAFICO", "email": "martin@grupoomega.com.mx"}, {"nombre": "OSCAR ORTIZ", "telefono": "81 8253 2567", "posicion": "ADMIN", "email": "oscar@grupoomega.com.mx"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["MONTERREY", "LAREDO", "TEXAS", "NUEVO LAREDO", "ESTADO DE MÉXICO"], "choferes": [], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3"], "cobertura_us": ["Zona 9", "Zona 10"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "SI (SOLO EN MX)", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L238630", "name": "AUTOLINEAS AMERICA SA DE CV", "operaciones": ["CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "LEOPOLDO RODRIGUEZ", "telefono": "867 116 3645", "posicion": "REPRESENTANTE COMERCIAL", "email": "leopoldo.rodriguez@alasa.com"}, {"nombre": "KEILA AVRIL ESCANDON", "telefono": "867 251 2555", "posicion": "DIRECTORA PRICING", "email": "keila.escandon@alasa.com"}, {"nombre": "ERWIN BERNAL", "telefono": "818 280 6642", "posicion": "DIRECTOR GENERAL", "email": "erwin.bernal@trayecto.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["MONTERREY", "QUERÉTARO", "ESTADO DE MÉXICO"], "choferes": [], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": [], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "SI", "hazmat": "SI", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L88778", "name": "BG TRUCKING INC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "MARLENE GUILLEN", "telefono": "(619) 634-8902", "posicion": "ENTERPRISE ACCOUNT EXECUTIVE", "email": "mguillen@bgttrucking.com"}, {"nombre": "MARLENE GUILLEN", "telefono": "(619) 634-8902", "posicion": "ENTERPRISE ACCOUNT EXECUTIVE", "email": "mguillen@bgttrucking.com"}, {"nombre": "MARLENE GUILLEN", "telefono": "(619) 634-8902", "posicion": "ENTERPRISE ACCOUNT EXECUTIVE", "email": "mguillen@bgttrucking.com"}], "fronteras": ["SAN DIEGO – TIJUANA", "CALEXICO – MEXICALI"], "terminales": ["CALIFORNIA", "BAJA CALIFORNIA"], "choferes": ["B1", "CDL"], "cobertura_mx": ["Zona 5"], "cobertura_us": ["Zona 7"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "SI", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L246789", "name": "B R TRANSPORT LLC", "operaciones": ["DIRECTO"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "SAUL BALDOMERO RDZ", "telefono": "8787826340", "posicion": "GERENTE GENERAL", "email": "saulrdz@transportesbr.com.mx"}, {"nombre": "SANDRA PEREZ", "telefono": "8304984870", "posicion": "COORDINADOR TRAF ICO", "email": "Traffic2@brtransportllc.com"}, {"nombre": "SAUL BALDOMERO RDZ", "telefono": "8787826340", "posicion": "GERENTE GENERAL", "email": "saulrdz@transportesbr.com.mx"}], "fronteras": ["DEL RIO – CIUDAD ACUÑA", "EAGLE PASS – PIEDRAS NEGRAS", "LAREDO – NUEVO LAREDO"], "terminales": ["COAHUILA", "NUEVO LAREDO", "EAGLE PASS"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3"], "cobertura_us": ["Zona 8", "Zona 10"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L251097", "name": "BCR TRANSPORT LLC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "ALONDRA SANTOS", "telefono": "956-531-1181", "posicion": "EXECUTIVE ACCOUNT", "email": "accounting@bcrtransportllc.com"}, {"nombre": "JORGE BUSTOS", "telefono": "956-531-1027", "posicion": "BUSINESS DEVELOPMENT", "email": "j.bustos@bcrtransportllc.com"}, {"nombre": "DIANA BUSTOS", "telefono": "956-815-8667", "posicion": "FINANCE DIRECTOR", "email": "d.bustos@bcrtransportllc.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["LAREDO", "QUERÉTARO", "ESTADO DE MÉXICO", "MONTERREY"], "choferes": ["B1", "CDL"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "NO", "oea": "NO", "hazmat": "SI (SOLO EN MX)", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L238209", "name": "CANO & SONS TRUCKING LLC", "operaciones": ["DIRECTO / INTRA US"], "equipo": ["CAJA SECA", "REFRIGERADO"], "contactos": [{"nombre": "DANIEL MENDOZA", "telefono": "956 402 1808", "posicion": "REPRESENTANTE COMERCIAL", "email": "dmendoza@canoandsonstrucking.com"}, {"nombre": "FELIPE MUÑIZ", "telefono": "956 651 2032", "posicion": "DIRECTOR GENERAL", "email": "felipe@canoandsonstrucking.com"}, {"nombre": "JOSE CANO", "telefono": "", "posicion": "DUEÑO", "email": "jose@canoandsonstrucking.com"}], "fronteras": ["LAREDO – NUEVO LAREDO", "PHARR – REYNOSA"], "terminales": ["MONTERREY", "TAMAULIPAS", "NUEVO LAREDO", "TEXAS"], "choferes": ["B1", "CDL"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L230766", "name": "VANT CARGO LLC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "PAULINA GARZA", "telefono": "8129044439", "posicion": "DIRECTOR CSR", "email": "paulinag@bevantcargo.com"}, {"nombre": "GERARDO RODRIGUEZ", "telefono": "8116007995", "posicion": "BUSINESS DEV. MANAGER", "email": "gerardo.rodriguez@clcsolutions.com.mx"}, {"nombre": "FRANCISCO LOPEZ", "telefono": "8116607537", "posicion": "DUEÑO", "email": "lopezf@clcsolutions.com.mx"}], "fronteras": ["LAREDO – NUEVO LAREDO", "MCALLEN – REYNOSA"], "terminales": ["MONTERREY", "COAHUILA", "NUEVO LAREDO", "LAREDO"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L269483", "name": "DANNY HERMAN TRUCKING INC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "BRENDA SALINAS", "telefono": "811 824 9898", "posicion": "OPERATIONS MANAGER", "email": "brenda.salinas@dannyherman.com"}, {"nombre": "BRENDA SALINAS", "telefono": "811 824 9898", "posicion": "OPERATIONS MANAGER", "email": "brenda.salinas@dannyherman.com"}, {"nombre": "ALDO AGUILAR", "telefono": "818 366 6613", "posicion": "DIRECTOR INTERNATIONAL SALES", "email": "Aldo.Aguilar@dannyherman.com"}], "fronteras": ["LAREDO – NUEVO LAREDO", "EL PASO – CIUDAD JUÁREZ", "NOGALES", "SAN DIEGO – TIJUANA"], "terminales": ["CALIFORNIA", "TEXAS", "ARIZONA", "LAREDO", "MISSOURI"], "choferes": ["CDL"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 10"], "no_cobertura": ["FLORIDA"], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L235435", "name": "DB XPRESS LLC", "operaciones": ["DIRECTO"], "equipo": ["CAJA SECA", "PLATAFORMA"], "contactos": [{"nombre": "EMMANUEL GUTIERREZ", "telefono": "(956) 220 2096", "posicion": "OPERATIONS MANAGER", "email": "egutierrez@db-xpress.com"}, {"nombre": "ALFREDO CASSO DE ANDA", "telefono": "(956) 489 8595", "posicion": "DUEÑO", "email": "acd@db-xpress.com"}, {"nombre": "ALFREDO CASSO GARCIA", "telefono": "(956) 286 8621", "posicion": "DUEÑO", "email": "acg@db-xpress.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["MONTERREY", "SAN LUIS POTOSÍ", "NUEVO LAREDO", "LAREDO"], "choferes": ["B1", "CDL"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": ["Zona 8", "Zona 9", "Zona 10"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L228608", "name": "EOM TRANSPORT LLC", "operaciones": ["DIRECTO"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "STEANIE ESCOBAR", "telefono": "956 2820360", "posicion": "", "email": ""}, {"nombre": "STEANIE ESCOBAR", "telefono": "956 2820360", "posicion": "DUEÑO", "email": "s.escobar@eomtransport.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["QUERÉTARO", "AGUASCALIENTES", "MONTERREY", "NUEVO LAREDO", "LAREDO"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3"], "cobertura_us": ["Zona 8", "Zona 10"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L239863", "name": "FJ CARRIER LOGISTICS LLC", "operaciones": ["DIRECTO"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "ARIEL GUTIERREZ", "telefono": "811 377 3282", "posicion": "GERENTE COMERCIAL", "email": "ariel@fjcarrierlogistics.com"}, {"nombre": "ERIC PEÑALVERT", "telefono": "818 016 6356", "posicion": "DUEÑO", "email": "epenalver@fjsoluciones.com.mx"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["LAREDO", "NUEVO LAREDO"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L239033", "name": "FLETES MEXICO CHIHUAHUA SA DE CV", "operaciones": ["CROSSBORDER"], "equipo": ["CAJA SECA", "RABON", "EQUIPO CHICO"], "contactos": [{"nombre": "HUMBERTO MENDOZA", "telefono": "8126803605", "posicion": "GERENTE COMERCIAL", "email": "hmendoza@Fletes-Mexico.com"}, {"nombre": "OMAR LOPEZ", "telefono": "5563530279", "posicion": "GERENTE", "email": "olopez@Fletes-Mexico.com"}, {"nombre": "JASIEL MORALES", "telefono": "8118034727", "posicion": "GERENTE ATC", "email": "jmoralesd@fletes-mexico.com"}], "fronteras": ["EL PASO – CIUDAD JUÁREZ", "LAREDO – NUEVO LAREDO"], "terminales": ["NUEVO LAREDO", "MONTERREY", "QUERÉTARO", "TOLUCA", "ESTADO DE MÉXICO", "CHIHUAHUA", "COAHUILA", "SONORA"], "choferes": [], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3"], "cobertura_us": [], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "SI", "hazmat": "SI", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L92390", "name": "ONSA TRUCK LINE LLC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "LETICIA MORALES PABELLO", "telefono": "956-220-5759", "posicion": "COORDINADOR B1", "email": "management@onsatruckline.com"}, {"nombre": "LETICIA MORALES PABELLO", "telefono": "956-220-5759", "posicion": "COORDINADOR B1", "email": "management@onsatruckline.com"}, {"nombre": "OVIDIO N. SALDAÑA", "telefono": "867-217-09-55", "posicion": "GERENTE COMERCIAL", "email": "administracion@fmsago.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["NUEVO LAREDO", "MONTERREY", "JALISCO", "ESTADO DE MÉXICO"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": ["Zona 8", "Zona 9", "Zona 10"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L238148", "name": "FORZA TRANSPORTATION SERVICES INC", "operaciones": ["DIRECTO / INTRA US"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "EDUARDO BARBA", "telefono": "956 267 6441", "posicion": "DIRECTOR COMERCIAL", "email": "eduardobarba@forzatrans.com"}, {"nombre": "ROBERTO PEREZ", "telefono": "", "posicion": "DUEÑO", "email": "robertoperez@forzatrans.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["LAREDO"], "choferes": ["B1", "CDL"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "", "oea": "", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L239761", "name": "FREIGHT HP-PACK INC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "ZULEMA CABRERA", "telefono": "", "posicion": "", "email": "zulema@hp-pack.com"}, {"nombre": "VERONICA PEREZ", "telefono": "", "posicion": "", "email": ""}, {"nombre": "CARLOS SALINAS", "telefono": "#ERROR!", "posicion": "DUEÑO", "email": "DUEÑO@hp-pack.com"}], "fronteras": ["LAREDO – NUEVO LAREDO", "MCALLEN – REYNOSA", "EL PASO – CIUDAD JUÁREZ"], "terminales": ["MONTERREY", "COAHUILA", "SAN LUIS POTOSÍ", "NUEVO LAREDO", "LAREDO"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4", "Zona 5", "Zona 6"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "SI", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L266076", "name": "FREIGHTSOL LLC", "operaciones": ["DIRECTO"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "ERIKA RAMOS", "telefono": "956 334 2227", "posicion": "GERENTE OPERACIONES", "email": "eramos@freightsol.net"}, {"nombre": "ROBERTO GUME", "telefono": "", "posicion": "DUEÑO", "email": ""}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["NUEVO LAREDO", "LAREDO"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "NO", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L238286", "name": "D-TROY LOGISTICS LLC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "ROGELIO GARCIA", "telefono": "812 000 5277", "posicion": "GERENTE COMERCIAL", "email": "rogelio.garcia@tle.com.mx"}, {"nombre": "AGUSTÍN SUSTAITA", "telefono": "811 516 4618", "posicion": "DIRECTOR COMERCIAL", "email": "agustin.sustaita@grupo-atc.com"}, {"nombre": "Arsenio Zuñiga", "telefono": "1 214 603 1398", "posicion": "DIRECTOR", "email": ""}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["ALTAMIRA", "MONTERREY", "COAHUILA", "GUANAJUATO", "SAN LUIS POTOSÍ", "SONORA", "NUEVO LAREDO"], "choferes": [], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": [], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "SI", "hazmat": "SI", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L252310", "name": "JACKY LINES INC", "operaciones": ["INTRA US"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "LIZ ROMERO", "telefono": "909 952 399", "posicion": "GERENTE DE OPERACIONES", "email": "jackylinesinc@GMAIL.COM"}, {"nombre": "ENRIQUE PAEZ", "telefono": "909 743 9709", "posicion": "DUEÑO", "email": "jackylinesinc@gmail.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["CALIFORNIA"], "choferes": ["B1"], "cobertura_mx": [], "cobertura_us": ["Zona 7"], "no_cobertura": [], "integracion": "", "ctpat": "", "oea": "", "hazmat": "", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L192590", "name": "KOH LOGISTICS USA INC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA", "PLATAFORMA"], "contactos": [{"nombre": "BERENZON VARELA", "telefono": "686 224 4911", "posicion": "SUPERVISOR OPERACIONES", "email": "Berenzon.varela@kohlogistics.com"}, {"nombre": "CESAR E. CALDERA", "telefono": "686 224 6481", "posicion": "GERENTE COMERCIAL", "email": "Cesar.caldera@kohlogistics.com"}, {"nombre": "CESAR MORALES", "telefono": "6862548456", "posicion": "GERENTE TERMINAL", "email": "Cesar.morales@kohlogistics.com"}], "fronteras": ["CALEXICO – MEXICALI"], "terminales": ["BAJA CALIFORNIA", "CALIFORNIA"], "choferes": ["B1"], "cobertura_mx": ["Zona 5"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L239652", "name": "M&J CARRIERS LLC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "MIGUEL GARCIA", "telefono": "867 213 5138", "posicion": "OPERACIONES", "email": "miguel.garcia@mjcarriers.com"}, {"nombre": "RAUL ROMO", "telefono": "956 652 5000", "posicion": "GERENTE DE OPERACIONES", "email": "raul.romo@mjcarriers.com"}, {"nombre": "JAMES GATZKA", "telefono": "", "posicion": "DUEÑO", "email": "james.gatzka@mjcarriers.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["NUEVO LAREDO", "LAREDO", "TEXAS"], "choferes": [], "cobertura_mx": ["Zona 1", "Zona 2"], "cobertura_us": ["Zona 8", "Zona 9", "Zona 10"], "no_cobertura": [], "integracion": "", "ctpat": "", "oea": "", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L238155", "name": "MAVERICK EXPRESS CARRIERS LLC", "operaciones": ["DIRECTO"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "MANUEL FLORRES", "telefono": "878 701 9735", "posicion": "SUPERVISOR CUSTOMER SERVICE", "email": "mflores@maverickexpresscarriers.com"}, {"nombre": "RODOLFO SIERRA", "telefono": "(830) 776-8165", "posicion": "DIRECTOR GENERAL", "email": "rsierra@maverickexpresscarriers.com"}], "fronteras": ["EAGLE PASS – PIEDRAS NEGRAS", "LAREDO – NUEVO LAREDO"], "terminales": ["COAHUILA"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L266754", "name": "NPA TEX TRANSPORT LLC", "operaciones": ["INTRA US"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "LAURA", "telefono": "305-970-9614", "posicion": "DISPATCH", "email": "nleonnpa@gmail.com"}, {"nombre": "LAURA", "telefono": "305-970-9614", "posicion": "DISPATCH", "email": "nleonnpa@gmail.com"}, {"nombre": "LAURA", "telefono": "305-970-9614", "posicion": "DISPATCH", "email": "nleonnpa@gmail.com"}], "fronteras": ["LAREDO – NUEVO LAREDO", "MCALLEN – REYNOSA", "EAGLE PASS – PIEDRAS NEGRAS"], "terminales": ["DALLAS", "TEXAS"], "choferes": [], "cobertura_mx": [], "cobertura_us": ["Zona 9"], "no_cobertura": [], "integracion": "", "ctpat": "NO", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L239592", "name": "OL LOGISTICS LLC", "operaciones": ["INTRA US"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "Samuel Martinez", "telefono": "956 754 3660", "posicion": "", "email": "samuel@ollogistics.com"}, {"nombre": "CIRO OCHOA", "telefono": "956 220 7200", "posicion": "DUEÑO", "email": "ciro@ollogistics.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["LAREDO"], "choferes": ["B1", "CDL"], "cobertura_mx": [], "cobertura_us": ["Zona 7", "Zona 8", "Zona 10"], "no_cobertura": [], "integracion": "", "ctpat": "NO", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L233747", "name": "PAM TRANSPORT INC", "operaciones": ["DIRECTO / INTRA US"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "JONATHAN LOPEZ", "telefono": "", "posicion": "OPERACIONES", "email": "LOPEJ2@pamt.com"}, {"nombre": "CESAR VILLARREAL", "telefono": "811 778 5794", "posicion": "GERENTE COMERCIAL", "email": "villc@pamt.com"}, {"nombre": "FERNANDO GONZALEZ", "telefono": "", "posicion": "DIRECTOR GENERAL", "email": "gonzf@pamt.com"}], "fronteras": ["LAREDO – NUEVO LAREDO", "EL PASO – CIUDAD JUÁREZ"], "terminales": ["NUEVO LAREDO"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "NO", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L233736", "name": "PASCHALL TRUCK LINES INC", "operaciones": ["DIRECTO / INTRA US"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "SERGIO HERNANDEZ", "telefono": "956 712 9554", "posicion": "GERENTE COMERCIAL", "email": "shernandez@ptl-inc.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["LAREDO", "NUEVO LAREDO"], "choferes": ["B1", "CDL"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10"], "no_cobertura": [], "integracion": "", "ctpat": "", "oea": "", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L252988", "name": "POVA CONNECT LLC", "operaciones": ["DIRECTO"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "RAMON POMARES", "telefono": "8119380639", "posicion": "GERENCIA", "email": "ramon@povatransport.com"}, {"nombre": "JOSE MARIA HERNANDEZ", "telefono": "8119410023", "posicion": "LOGISTICA", "email": "jmhernandez@povatransport.com"}, {"nombre": "LUIS HUERTA/ BLANCA SERNA", "telefono": "8119410782", "posicion": "MONITOREO", "email": "despacho@povatransport.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["MONTERREY", "NUEVO LAREDO"], "choferes": ["B1"], "cobertura_mx": ["Zona 1"], "cobertura_us": ["Zona 9"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L239540", "name": "RAAF LOGISTICS LLC", "operaciones": ["DIRECTO"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "RODOLFO BOEHRINGER", "telefono": "956-774-4001", "posicion": "GERENTE GENERAL", "email": "rodolfo@raaflogistics.com"}, {"nombre": "ANDREA CORDERO", "telefono": "956-526-5014", "posicion": "TEAM LEAD OPERATIONS", "email": "dispatch2@raaflogistics.com"}, {"nombre": "ELIZABETH OLVERA", "telefono": "956-413-5690", "posicion": "TEAM LEAD OPERATIONS", "email": "dispatch@raaflogistics.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["LAREDO", "NUEVO LAREDO", "MONTERREY", "COAHUILA", "ZACATECAS"], "choferes": [], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3"], "cobertura_us": ["Zona 8", "Zona 9", "Zona 10"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L53025", "name": "RAPID TRANSPORT", "operaciones": ["DIRECTO"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "EDGAR VALDEZ", "telefono": "#ERROR!", "posicion": "DIRECTOR COMERCIAL", "email": "evaldez@rapidtransport.com"}], "fronteras": ["LAREDO – NUEVO LAREDO", "MCALLEN – REYNOSA"], "terminales": [], "choferes": ["CDL"], "cobertura_mx": ["Zona 1"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "SI", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L153001", "name": "RHIM CARRIERS INC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "JESUS OZUNA", "telefono": "867 317 3703", "posicion": "OPERACIONES", "email": "dispatchNB@rhimcarriers.com"}, {"nombre": "YESSICA REYES", "telefono": "867 315 6682", "posicion": "LIDER DE EQUIPO", "email": "accounting@rhimcarriers.com"}, {"nombre": "RAUL HINOJOSA", "telefono": "#ERROR!", "posicion": "DUEÑO", "email": "raulhinojosa@rhimcarriers.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": [], "choferes": ["B1"], "cobertura_mx": [], "cobertura_us": [], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L106059", "name": "RIG LOGISTICS INC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA", "REFRIGERADO"], "contactos": [{"nombre": "ISELA TREJO", "telefono": "4191160954", "posicion": "BUSINESS DEVELOPMENT", "email": "mexicosales@riglogistics.com"}, {"nombre": "NARINDER SANGHA", "telefono": "8667050222", "posicion": "COO", "email": "narinder@riglogistics.com"}, {"nombre": "JEFF DERKSEN", "telefono": "2042968955", "posicion": "VP SALES", "email": "Jeff.derksen@riglogistics.com"}], "fronteras": ["LAREDO – NUEVO LAREDO", "MCALLEN – REYNOSA", "EL PASO – CIUDAD JUÁREZ", "PHARR – REYNOSA"], "terminales": ["LAREDO", "ONTARIO"], "choferes": ["CDL"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": ["Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "SI", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L242539", "name": "RIGONZA TRUCKING INC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA", "RABON"], "contactos": [{"nombre": "MARCO BARRAZA", "telefono": "867-2007378", "posicion": "COMERCIAL", "email": "m.barraza@transrigonza"}, {"nombre": "ISRAEL BARRIOS", "telefono": "867 206 2548", "posicion": "OPERACIONES", "email": "Israel.barrios@transrigonza.com"}, {"nombre": "FRANCISCO GONZALEZ", "telefono": "867 105 6295", "posicion": "DIRECCIÓN", "email": "arivera@transrigonza.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["MONTERREY", "NUEVO LAREDO"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9"], "no_cobertura": [], "integracion": "", "ctpat": "", "oea": "", "hazmat": "", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L236614", "name": "ROGER EXPRESS SA DE CV", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "DIEGO LOZANO", "telefono": "8671056826", "posicion": "GERENTE COMERCIAL", "email": "diego@rogerexpress.com.mx"}, {"nombre": "DANIEL LOZANO", "telefono": "8671091994", "posicion": "GERENTE OPERACIONES", "email": "daniel.lozano@rogerexpress.com.mx"}, {"nombre": "LUIS LOZANO", "telefono": "8672170959", "posicion": "", "email": "davidlozano@rogerexpress.com.mx"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["NUEVO LAREDO", "NUEVO LEÓN"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4", "Zona 5", "Zona 6"], "cobertura_us": ["Zona 8", "Zona 9", "Zona 10"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L239596", "name": "ROYAL FREIGHT L.P", "operaciones": ["DIRECTO / INTRA US"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "MARCELA ACOSTA", "telefono": "811 811 11 59", "posicion": "GERENTE COMERCIAL", "email": "marcelaa@royalfreight.net"}], "fronteras": ["LAREDO – NUEVO LAREDO", "PHARR – REYNOSA"], "terminales": ["LAREDO"], "choferes": ["B1"], "cobertura_mx": ["Zona 1"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "", "oea": "", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L239653", "name": "SAMAX EXPRESS INC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "ALBERTO MARTINEZ", "telefono": "956 327 4077", "posicion": "CSR", "email": "amartinez@selaxtransportation.com"}, {"nombre": "CLAUDIA RIVAS", "telefono": "956 327 4888", "posicion": "GERENTE VENTAS", "email": "crivas@samaxexpress.com"}, {"nombre": "GABRIEL SALDIVAR", "telefono": "956 231 8868", "posicion": "DUEÑO", "email": "Gabriel.saldivar@samaxexpress.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["MONTERREY", "GUANAJUATO", "NUEVO LAREDO", "LAREDO"], "choferes": ["B1"], "cobertura_mx": ["Zona 2", "Zona 3", "Zona 4"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L234770", "name": "SBC TRANSPORTATION INC", "operaciones": ["DIRECTO"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "DANIELA DE LA GARZA", "telefono": "956 898 9059", "posicion": "DIRECTORA OPERACIONES", "email": "daniela.delagarza@sbctransportation.com"}, {"nombre": "VALERIA GONZALEZ", "telefono": "956 740 5531", "posicion": "DIRECTOR GENERAL", "email": "valeria@sbctransportation.com"}, {"nombre": "CARLOS GRAJEDA", "telefono": "956 235 6239", "posicion": "DUEÑO", "email": "cgrajeda@sbctransportation.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["NUEVO LAREDO", "LAREDO"], "choferes": ["B1", "CDL"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L235794", "name": "SELECT DEDICATED SOLUTIONS", "operaciones": ["DIRECTO"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "JESUS BETANCOURT", "telefono": "867 217 1319", "posicion": "SUPERVISOR COMERCIAL", "email": "jesus.betancourt@selectds.net"}, {"nombre": "RICARDO GONZALEZ", "telefono": "811 909 2206", "posicion": "DIRECTOR COMERCIAL", "email": "ricardo.gonzalez@selectds.net"}, {"nombre": "RAUL LEAL", "telefono": "867 206 0157", "posicion": "GERENTE OPERACIONES", "email": "raul.leal@selectds.net"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["NUEVO LAREDO", "LAREDO"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L239860", "name": "SUPER TRANSPORT INTERNATIONAL LTD", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA", "ESPECIALIZADO", "PLATAFORMA"], "contactos": [{"nombre": "AARON GUERRERO", "telefono": "867 206 2006", "posicion": "BUSINESS DEVELOPMENT", "email": "aaron.guerrero@sti.com.mx"}, {"nombre": "ANTONIO MEDINA", "telefono": "956 857 7804", "posicion": "CSR MANAGER", "email": "antonio.medina@sti-laredo.com"}, {"nombre": "JOSE GAYTAN", "telefono": "956 754 9717", "posicion": "DUEÑO", "email": "jose.gaytan@sti.com.mx"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["NUEVO LAREDO", "MONTERREY", "COAHUILA", "SAN LUIS POTOSÍ", "GUANAJUATO", "QUERÉTARO", "TOLUCA", "PUEBLA", "VERACRUZ", "LAREDO", "TEXAS", "TENNESSEE", "MICHIGAN"], "choferes": ["B1", "CDL"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "SI", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L239723", "name": "TEXAS INTERNATIONAL ENTERPRISES INC", "operaciones": ["DIRECTO / INTRA US"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "ALEKSEY ALVARADO", "telefono": "956 635 8911", "posicion": "OPERACIONES EXPORTACION", "email": "aleksey.alvarado@texasie.com"}, {"nombre": "EDER LOPEZ", "telefono": "956 489 2419", "posicion": "OPERACIONES IMPORTACION", "email": "eder.lopez@texasie.com"}, {"nombre": "OSCAR GOMEZ", "telefono": "33 1010 1987", "posicion": "DUEÑO", "email": "oscar.gomez@texasie.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["MONTERREY", "NUEVO LAREDO", "LAREDO"], "choferes": [], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L239512", "name": "THR LLC", "operaciones": ["DIRECTO"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "SILVIA GONZALEZ", "telefono": "9565388079", "posicion": "PRICING", "email": "Pricing@thrinternational.net"}, {"nombre": "LUIS HERNANDEZ", "telefono": "#ERROR!", "posicion": "GERENTE DE OPERACIONES", "email": "luishndz@thrinternational.net"}, {"nombre": "JERSON HERNANDEZ", "telefono": "#ERROR!", "posicion": "SUPERVISOR CS", "email": "operations2@thrinternational.net"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["NUEVO LAREDO"], "choferes": ["B1"], "cobertura_mx": ["Zona 2", "Zona 4"], "cobertura_us": ["Zona 7", "Zona 8"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L239862", "name": "TM TRANSPORTATION SERVICES LLC", "operaciones": ["DIRECTO"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "VICTOR LOZANO", "telefono": "", "posicion": "PRICING", "email": "pricing@tmtransportation.us"}, {"nombre": "JAVIER ZALETA", "telefono": "871 105 1968", "posicion": "GERENTE COMERCIAL", "email": "javier.zaleta@grupo-tm.com>"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["NUEVO LAREDO", "LAREDO"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3"], "cobertura_us": ["Zona 9", "Zona 10", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L246350", "name": "TMO EXPRESS LLC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "EDWIN GARCIA", "telefono": "8672468211", "posicion": "GERENTE OPERACIONES", "email": "edwin.garcia@tmoexpress.com"}, {"nombre": "CESAR DIAZ GARZA", "telefono": "8110188335", "posicion": "DIRECTOR", "email": "cc@tmoexpress.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["NUEVO LAREDO"], "choferes": ["B1"], "cobertura_mx": ["Zona 2"], "cobertura_us": ["Zona 9"], "no_cobertura": [], "integracion": "", "ctpat": "NO", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L238203", "name": "TRANS 99 LOGISTICS USA INC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "JESUS VALDEZ", "telefono": "8441221863", "posicion": "DIRECTOR MX", "email": "jesus@trans99.net"}, {"nombre": "JESUS VALDEZ", "telefono": "8441221863", "posicion": "DIRECTOR MX", "email": "jesus@trans99.net"}, {"nombre": "JESUS VALDEZ", "telefono": "8441221863", "posicion": "DIRECTOR MX", "email": "jesus@trans99.net"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["LAREDO", "MICHIGAN", "ONTARIO"], "choferes": ["CDL"], "cobertura_mx": ["Zona 1", "Zona 2"], "cobertura_us": ["Zona 7", "Zona 8"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "SI", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L138627", "name": "TRANSCABRERA USA INC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "OSCAR CABRERA", "telefono": "4442164595", "posicion": "GERENTE GENERAL", "email": "gerencia@transcabrera.com"}, {"nombre": "EMILIO CABRERA", "telefono": "4441926858", "posicion": "GERENTE DE OPERACIONES", "email": "coordinacion@transcabrera.com"}, {"nombre": "OSCAR CABRERA", "telefono": "4442164595", "posicion": "GERENTE GENERAL", "email": "gerencia@transcabrera.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["SAN LUIS POTOSÍ", "NUEVO LAREDO", "LAREDO"], "choferes": [], "cobertura_mx": ["Zona 1", "Zona 2"], "cobertura_us": ["Zona 9", "Zona 8"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L239533", "name": "TRANS-NATIONAL EXPRESS", "operaciones": ["DIRECTO"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "SANTIAGO RUIZ", "telefono": "8135999192", "posicion": "GERENTE COMERCIAL", "email": "sruiz@tnexpress.net"}, {"nombre": "DANIEL AMAYA", "telefono": "6141681048", "posicion": "GERENTE COMERCIAL", "email": "dmaya@tnexpress.net"}, {"nombre": "CARLOS CASTIGLIONI", "telefono": "8671090803", "posicion": "OPS & VENTAS", "email": "ccastiglioni_diaz@keypointcarriers.com"}], "fronteras": ["SAN DIEGO – TIJUANA", "EL PASO – CIUDAD JUÁREZ", "LAREDO – NUEVO LAREDO", "MCALLEN – REYNOSA", "DEL RIO – CIUDAD ACUÑA"], "terminales": ["TEXAS", "LAREDO", "ARIZONA", "CALIFORNIA"], "choferes": ["CDL"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L234777", "name": "TA LOGISTICS INC", "operaciones": ["DIRECTO"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "ALEXIS ESTRADA", "telefono": "33 1987 0930", "posicion": "GERENTE COMERCIAL", "email": "aestrada@transportesamericanos.com"}, {"nombre": "ANDREY GUZMAN", "telefono": "333 808 8444", "posicion": "GERENCIA", "email": "aguzman@transportesamericanos.com"}, {"nombre": "ANDREY GUZMAN", "telefono": "333 808 8444", "posicion": "GERENCIA", "email": "aguzman@transportesamericanos.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["JALISCO", "NUEVO LAREDO", "LAREDO"], "choferes": ["B1"], "cobertura_mx": ["Zona 2", "Zona 3", "Zona 4"], "cobertura_us": ["Zona 8", "Zona 9", "Zona 10"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L239858", "name": "ARALO EXPRESS USA INC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "ISABEL MÉNDEZ", "telefono": "811 987 4074", "posicion": "GERENTE COMERCIAL", "email": "isabel.mendez@grupoaralo.com"}, {"nombre": "ISABEL MÉNDEZ", "telefono": "811 987 4074", "posicion": "GERENTE COMERCIAL", "email": "isabel.mendez@grupoaralo.com"}, {"nombre": "JUAN MORENO", "telefono": "464 137 3540", "posicion": "DIRECTOR COMERCIAL", "email": "juan.moreno@grupoaralo.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["NUEVO LAREDO", "LAREDO", "GUANAJUATO"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3"], "cobertura_us": ["Zona 8", "Zona 9", "Zona 10"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "SI", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L239358", "name": "TRANSPORTES DE CARGA FEMA", "operaciones": ["CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "CRISTIAN GANDARA", "telefono": "867 129 9768", "posicion": "REPRESENTANTE COMERCIAL", "email": "cristian.gandara@tfema.com"}, {"nombre": "ALLAN GARCIA", "telefono": "867 100 4416", "posicion": "GERENTE COMERCIAL", "email": "allan.garcia@tfema.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["COAHUILA", "GUANAJUATO", "QUERÉTARO", "ESTADO DE MÉXICO"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": [], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "SI", "hazmat": "SI", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L239534", "name": "TRANSPORTES H&H LOGISTICS", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA", "RABON", "EQUIPO CHICO"], "contactos": [{"nombre": "CARLOS BERMUDEZ", "telefono": "(956) 235-0147", "posicion": "GERENTE US", "email": "carlos.bermudez@transporteshh.com"}, {"nombre": "LEONCIO DE LA PIEDRA", "telefono": "(867) 217-0231", "posicion": "GERENTE MX", "email": "leoncio.delapiedra@transporteshh.com"}, {"nombre": "CARLOS BERMUDEZ", "telefono": "(956) 235-0147", "posicion": "GERENTE US", "email": "carlos.bermudez@transporteshh.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["NUEVO LAREDO", "LAREDO"], "choferes": [], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": [], "no_cobertura": ["OREGON"], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "SÍ (SOLO EN MX)", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L104691", "name": "TRANSPORTES INNOVATIVOS SA DE CV.", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "JUAN PABLO FLORES", "telefono": "33 1850 7315", "posicion": "GERENTE COMERCIAL", "email": "jpablo_flores@innovativos.mx"}, {"nombre": "ALDO OJEDA", "telefono": "33 1699 2147", "posicion": "CUSTOMER SERVICE", "email": "aldo_ojeda@innovativos.mx"}, {"nombre": "JUAN PABLO FLORES", "telefono": "33 1850 7315", "posicion": "GERENTE VENTAS", "email": "jpablo_flores@innovativos.mx"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["JALISCO", "GUANAJUATO", "QUERÉTARO", "MONTERREY", "NUEVO LAREDO"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3"], "cobertura_us": [], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "SI", "hazmat": "SI", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L239501", "name": "TEXPORT TRUCKING LLC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA", "ESPECIALIZADO", "PLATAFORMA"], "contactos": [{"nombre": "ROSA CHAVARRIA", "telefono": "867 987 0229", "posicion": "GERENTE DE TRAFICO", "email": "rosa.chavarria@transportesmineros.com"}, {"nombre": "ESMERALDA FUENTES", "telefono": "866 107 9071", "posicion": "GERENTE ADMINISTRATIVA", "email": ""}, {"nombre": "ADIP APUD", "telefono": "866 107 0219", "posicion": "COMERCIAL", "email": "adip.apud@transportesmineros.com"}], "fronteras": ["LAREDO – NUEVO LAREDO", "EAGLE PASS – PIEDRAS NEGRAS"], "terminales": ["NUEVO LAREDO", "MONTERREY", "ESTADO DE MÉXICO", "COAHUILA", "TEXAS", "VERACRUZ"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4", "Zona 5", "Zona 6"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "SI", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L235431", "name": "TRATA USA LLC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA", "RABON", "EQUIPO CHICO", "PLATAFORMA"], "contactos": [{"nombre": "SILVIA G RAYA", "telefono": "(956)-962-5787", "posicion": "EJECUTIVA OPERACIONES", "email": "dispatch@tratausa.com"}, {"nombre": "LUIS RODRIGUEZ", "telefono": "(867)-206-5461", "posicion": "EJECUTIVO OPERACIONES", "email": "executive1@wisecargol.com"}, {"nombre": "JOSE LUIS RIVERA", "telefono": "(867)-217-4732", "posicion": "SUPERVISOR OPERACIONES", "email": "sup.operaciones@tratasa.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["NUEVO LAREDO"], "choferes": ["B1", "CDL"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L260235", "name": "TROB USA LLC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "JUAN VIVEROS", "telefono": "81 1239 2266", "posicion": "GERENTE COMERCIAL", "email": "juan.viveros@trob.com.mx"}], "fronteras": ["LAREDO – NUEVO LAREDO", "MCALLEN – REYNOSA"], "terminales": ["MONTERREY", "GUANAJUATO", "ESTADO DE MÉXICO", "JALISCO"], "choferes": ["B1", "CDL"], "cobertura_mx": ["Zona 1"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "SI", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L250251", "name": "TSM CONNECT SA DE CV", "operaciones": ["CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "PERLA LIZETH ALDAY", "telefono": "844 866 9341", "posicion": "SUPERVISORA CUSTOMER SERVICE", "email": "palday@tsmconnect.com"}, {"nombre": "ROBERTO GUZMAN PEÑAFLOR", "telefono": "844 858 0066", "posicion": "GERENTE DE OPERACIONES", "email": "rguzman@tsmconnect.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["NUEVO LAREDO", "COAHUILA", "TOLUCA"], "choferes": [], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3"], "cobertura_us": [], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L100895", "name": "TURR TRANSPORTATION INC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA", "REFRIGERADO", "RABON", "EQUIPO CHICO"], "contactos": [{"nombre": "ADRIAN MONTEMAYOR / CRUZ RENDON", "telefono": "5648419756 / 8671934965", "posicion": "GERENTE DE OPERACIONES", "email": "LOGISTICA@TURR.MX/ ADRIANMONTEMAYORB@GMAIL.COM"}, {"nombre": "NORMA (INTRA US)", "telefono": "", "posicion": "", "email": ""}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["TAMAULIPAS", "LAREDO", "NUEVO LAREDO"], "choferes": ["B1", "CDL"], "cobertura_mx": [], "cobertura_us": [], "no_cobertura": [], "integracion": "", "ctpat": "CTPAT", "oea": "SI", "hazmat": "SI", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L248830", "name": "TWO WAY LOGISTICS INC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "ROBERTO JAIR CRUZ", "telefono": "867 740 6245", "posicion": "REPRESENTANTE COMERCIAL", "email": "asesorcomercial@twt.com.mx"}, {"nombre": "JAIR RODRIGUEZ", "telefono": "867 129 6928", "posicion": "GERENTE GENERAL", "email": "cjrodriguez@twt.com.mx"}, {"nombre": "JORGE RICARDO CARLO MEJIA", "telefono": "81 2021 4449", "posicion": "DIRECTOR COMERCIAL", "email": "dircomercial@twt.com.mx"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["LAREDO", "NUEVO LAREDO", "COAHUILA", "ALTAMIRA", "QUERÉTARO", "SAN LUIS POTOSÍ", "MONTERREY"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": ["Zona 9", "Zona 10"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "SI", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L260371", "name": "VALUE TRUCK OF AZ. INC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "HUMBERTO SOTO", "telefono": "8118613154", "posicion": "SALES REPRESENTATIVE", "email": "h.soto@valuetruckaz.com"}, {"nombre": "HUMBERTO MIRELES", "telefono": "(1) 2104194175", "posicion": "DIRECTOR SALES", "email": "h.mireles@valuetruckaz.com"}, {"nombre": "HUMBERTO MIRELES", "telefono": "(1) 2104194175", "posicion": "DIRECTOR SALES", "email": "h.mireles@valuetruckaz.com"}], "fronteras": ["LAREDO – NUEVO LAREDO", "MCALLEN – REYNOSA", "SAN DIEGO – TIJUANA"], "terminales": ["MONTERREY", "NUEVO LAREDO", "LAREDO", "UTAH", "ARIZONA", "TEXAS"], "choferes": ["B1", "CDL"], "cobertura_mx": ["Zona 1"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "SI", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L140691", "name": "VIA EXPRESS SA DE CV", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA", "REFRIGERADO"], "contactos": [{"nombre": "ROY BLANCO", "telefono": "867 178 0653", "posicion": "COMERCIAL", "email": "roy.blanco@viaexpress.com.mx"}, {"nombre": "LUIS CRUZ", "telefono": "#ERROR!", "posicion": "DUEÑO", "email": "luis.cruz@viaexpress.com.mx"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["LAREDO", "NUEVO LAREDO"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3"], "cobertura_us": ["Zona 8", "Zona 9", "Zona 10"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L240536", "name": "WERNER ENTERPRISES, INC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA", "REFRIGERADO"], "contactos": [{"nombre": "DONNA ORTEGA", "telefono": "956 8981798", "posicion": "SR REGIONAL SALES MANAGER", "email": "dortega@werner.com"}, {"nombre": "DONNA ORTEGA", "telefono": "956 8981798", "posicion": "SR REGIONAL SALES MANAGER", "email": "dortega@werner.com"}, {"nombre": "DONNA ORTEGA", "telefono": "956 8981798", "posicion": "SR REGIONAL SALES MANAGER", "email": "dortega@werner.com"}], "fronteras": ["LAREDO – NUEVO LAREDO", "EL PASO – CIUDAD JUÁREZ", "EAGLE PASS – PIEDRAS NEGRAS"], "terminales": ["PENNSYLVANIA", "GEORGIA", "MICHIGAN", "ILLINOIS", "TEXAS", "DALLAS", "COLORADO", "CALIFORNIA", "FLORIDA", "ARIZONA", "OHIO", "INDIANA", "ARKANSAS"], "choferes": ["CDL"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4", "Zona 5", "Zona 6"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "SI", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L249693", "name": "WHEEL KING TRANSHAUL INC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "ALEX OAXACA", "telefono": "811 965 7394", "posicion": "GERENTE COMERCIAL", "email": "alexo@wheelkingtranshaul.com"}, {"nombre": "CHRIS BRENNAN", "telefono": "647 446 8183", "posicion": "VICEPRESIDENTE", "email": "cbrennan@wheelkingtranshaul.com"}, {"nombre": "VICKY BRAR", "telefono": "", "posicion": "DUEÑO", "email": "vicky@wheelkingtranshaul.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["LAREDO", "ONTARIO", "QUEBEC"], "choferes": [], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4"], "cobertura_us": ["Zona 8", "Zona 9", "Zona 10", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "", "oea": "", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L110166", "name": "XPRESS ELITE CARRIERS LLC", "operaciones": ["DIRECTO"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "EUGENIO LOPEZ", "telefono": "8119997971", "posicion": "DESPACHADOR", "email": "elopez@xpresselitecarriers.com"}, {"nombre": "EDUARDO TREVIÑO", "telefono": "9563102284", "posicion": "DESPACHADOR", "email": "eduardo@xpresselitecarriers.com"}, {"nombre": "LUIS SAENZ", "telefono": "9564327691", "posicion": "GERENTE", "email": "luis.saenz@xpresselitecarriers.com"}], "fronteras": ["LAREDO – NUEVO LAREDO", "MCALLEN – REYNOSA", "BROWNSVILLE – MATAMOROS"], "terminales": ["TAMAULIPAS", "NUEVO LAREDO", "TEXAS"], "choferes": [], "cobertura_mx": ["Zona 1"], "cobertura_us": ["Zona 9"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L246790", "name": "XTRADE INC", "operaciones": ["DIRECTO"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "CIRCE MERCADO", "telefono": "8673150087", "posicion": "CSR MANAGER", "email": "cmercado@tradexlogisticsinc.com"}, {"nombre": "ALEJANDRO VALDEZ", "telefono": "9567016200", "posicion": "DIRECTOR DE OPERACIONES", "email": "avaldez@tradexlogisticsinc.com"}, {"nombre": "LEOPOLDO LOZANO", "telefono": "956 740 2855", "posicion": "DUEÑO", "email": "lmendiola@tradexlogisticsinc.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["GUANAJUATO", "NUEVO LEÓN", "LAREDO"], "choferes": ["B1"], "cobertura_mx": [], "cobertura_us": [], "no_cobertura": [], "integracion": "", "ctpat": "NO", "oea": "", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L269256", "name": "YBM INTERNATIONAL TRANSPORT LLC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "JOSE ROBERTO OCAÑA", "telefono": "867 202 2592", "posicion": "SUPERVISOR", "email": "roberto.ocana@ybmlogistics.com"}, {"nombre": "ARTURO GARCIA", "telefono": "867 593 1553", "posicion": "GERENTE OPERACIONES", "email": "Arturo.garcia@ybmlogistics.com"}, {"nombre": "RICARDO PILLADO", "telefono": "867 129 5965", "posicion": "DIRECTOR GENERAL", "email": ""}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["LAREDO", "NUEVO LAREDO"], "choferes": ["B1"], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3", "Zona 4", "Zona 6"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10", "Zona 11"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "NO", "hazmat": "SI", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L244181", "name": "ZARO TRANSPORTATION LLC", "operaciones": ["DIRECTO"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "ELENA TORRES", "telefono": "867 155 2512", "posicion": "CUSTOMER SERVICE", "email": "etorres@zarologistics.com"}, {"nombre": "GUSTAVO FRAIRE", "telefono": "867 250 1459", "posicion": "CUSTOMER SERVICE LEADER", "email": "gfraire@zarotransportation.com"}, {"nombre": "DANIEL NUÑEZ", "telefono": "867 250 1460", "posicion": "SALES LEADER", "email": "dnunez@zarotransportation.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["LAREDO", "NUEVO LAREDO"], "choferes": [], "cobertura_mx": ["Zona 1", "Zona 2", "Zona 3"], "cobertura_us": ["Zona 8", "Zona 9", "Zona 10"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "SI", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L243546", "name": "VALO LOGISTICS LLC", "operaciones": ["DIRECTO"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "JULIO BARRERA", "telefono": "(862) 100 0910", "posicion": "GERENTE GENERAL", "email": "gerenciageneral@odel.com.mx"}], "fronteras": ["DEL RIO – CIUDAD ACUÑA", "EAGLE PASS – PIEDRAS NEGRAS", "LAREDO – NUEVO LAREDO"], "terminales": ["EAGLE PASS"], "choferes": ["B1", "CDL"], "cobertura_mx": ["Zona 2", "Zona 1"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 10"], "no_cobertura": [], "integracion": "", "ctpat": "SI", "oea": "SI", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}, {"id": "L245922", "name": "DETA LOGISTICS LLC", "operaciones": ["DIRECTO / CROSSBORDER"], "equipo": ["CAJA SECA"], "contactos": [{"nombre": "ANTONIO ALMANZA", "telefono": "", "posicion": "", "email": "a.almanza@detallc.com"}], "fronteras": ["LAREDO – NUEVO LAREDO"], "terminales": ["MONTERREY", "NUEVO LAREDO", "LAREDO"], "choferes": ["B1", "CDL"], "cobertura_mx": ["Zona 2", "Zona 1"], "cobertura_us": ["Zona 7", "Zona 8", "Zona 9", "Zona 10"], "no_cobertura": [], "integracion": "", "ctpat": "NO", "oea": "NO", "hazmat": "NO", "comentarios": "", "agregado_por_nombre": "", "agregado_por_departamento": ""}];
+let nextIdCounter = 1000;
+let activeFilters = { operacion:"", zone:"", hazmat:"", terminal:"", equipo:"", frontera:"", query:"" };
+/* ============ Microsoft 365 config ============ */
+const MSAL_CONFIG = {
+  auth: {
+    clientId: "199731ba-b0b8-4f5f-8dc4-bdf586c4d2a7",
+    authority: "https://login.microsoftonline.com/5a6a25f1-e380-4b6b-8551-c52d480ae7bd",
+    redirectUri: "https://eglcarrierdatabase.netlify.app"
+  },
+  cache: { cacheLocation: "sessionStorage", storeAuthStateInCookie: false }
+};
+const GRAPH_SCOPES = ["Files.ReadWrite"];
+const EXCEL_SHARE_LINK = "https://echogl-my.sharepoint.com/:x:/g/personal/alvaro_olguin_echo_com/IQDEfmZoPTjETo8Ui7DG7OpcAQ53ctQQiwpF8UPXtCwg_js?e=skprJt";
+const EXCEL_TABLE_NAME = "carriers";
+const msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
+let graphAccount = null;
+let excelDriveId = null, excelItemId = null, excelColumns = null;
+
+function escapeHtml(s){ return String(s??"").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+let toastTimer = null;
+function showToast(msg, type){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = type;
+  requestAnimationFrame(()=> el.classList.add('show'));
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> el.classList.remove('show'), 3500);
+}
+function opColor(ops){ return OP_COLORS[(ops&&ops[0])||''] || "#ffb347"; }
+
+/* ============ map ============ */
+const map = L.map('map', { zoomControl:false, worldCopyJump:false }).setView([22.5, -100.5], 6);
+L.control.zoom({ position:'bottomright' }).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
+  attribution:'&copy; OpenStreetMap &copy; CARTO', maxZoom: 18, minZoom: 3
+}).addTo(map);
+const labelsLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
+  attribution:'&copy; OpenStreetMap &copy; CARTO', maxZoom: 18, minZoom: 3
+});
+const LABEL_MIN_ZOOM = 8;
+const NON_STATE_TERMINALS = ["ALTAMIRA","NUEVO LAREDO","LAREDO","MONTERREY","DALLAS","TOLUCA","EAGLE PASS"];
+function titleCase(s){ return s.toLowerCase().replace(/\b\w/g, ch=>ch.toUpperCase()); }
+const stateLabelsLayer = L.layerGroup();
+Object.entries(TERMINAL_COORDS).forEach(([name, coord])=>{
+  if(NON_STATE_TERMINALS.includes(name)) return;
+  const icon = L.divIcon({ className:'state-label-icon', html:`<span>${titleCase(name)}</span>`, iconSize:null });
+  L.marker(coord, { icon, interactive:false, keyboard:false }).addTo(stateLabelsLayer);
+});
+stateLabelsLayer.addTo(map);
+function updateLabelsLayer(){
+  if(map.getZoom() >= LABEL_MIN_ZOOM){
+    if(!map.hasLayer(labelsLayer)) labelsLayer.addTo(map);
+    if(map.hasLayer(stateLabelsLayer)) map.removeLayer(stateLabelsLayer);
+  } else {
+    if(map.hasLayer(labelsLayer)) map.removeLayer(labelsLayer);
+    if(!map.hasLayer(stateLabelsLayer)) stateLabelsLayer.addTo(map);
+  }
+}
+map.on('zoomend', updateLabelsLayer);
+updateLabelsLayer();
+let markerLayer = L.layerGroup().addTo(map);
+
+function hashJitter(seed){
+  let h=0; for(let i=0;i<seed.length;i++) h=(h*31+seed.charCodeAt(i))&0xffffffff;
+  return [((h%1000)/1000-0.5)*0.06, (((h>>8)%1000)/1000-0.5)*0.06];
+}
+
+function popupHtml(c){
+  const color = opColor(c.operaciones);
+  const zoneTags = [...c.cobertura_mx,...c.cobertura_us].map(zid => ZONE_BY_ID[zid] ? `<span class="zonetag">${ZONE_BY_ID[zid].label}</span>` : "").join("");
+  const contact = c.contactos[0] || {};
+  return `<div class="popup">
+    <span class="ptag" style="background:${color};color:${opTextColor(c.operaciones)}">${escapeHtml((c.operaciones||[]).join(', '))}</span>
+    <h4>${escapeHtml(c.name)}</h4>
+    <p>L# ${escapeHtml(c.id)}</p>
+    <p>${escapeHtml((c.equipo||[]).join(', '))}</p>
+    <p>Carrier Assignment: ${escapeHtml(c.carrier_assignment||'-')} ${c.ownership?('· Ownership: '+escapeHtml(c.ownership)):''}</p>
+    <p>${contact.telefono?escapeHtml(contact.telefono):''}</p>
+    <p>${escapeHtml(contact.email||'')}</p>
+    <p>Hazmat: ${escapeHtml(c.hazmat||'-')} · CTPAT: ${escapeHtml(c.ctpat||'-')} · OEA: ${escapeHtml(c.oea||'-')}</p>
+    ${zoneTags ? `<div class="zones">${zoneTags}</div>` : ''}
+  </div>`;
+}
+
+function filteredCarriers(){
+  const q = activeFilters.query.trim().toLowerCase();
+  return carriers.filter(c=>{
+    if(activeFilters.operacion && !(c.operaciones||[]).includes(activeFilters.operacion)) return false;
+    if(activeFilters.zone && !([...c.cobertura_mx,...c.cobertura_us].includes(activeFilters.zone))) return false;
+    if(activeFilters.hazmat && c.hazmat !== activeFilters.hazmat) return false;
+    if(activeFilters.terminal && !(c.terminales||[]).includes(activeFilters.terminal)) return false;
+    if(activeFilters.equipo && !(c.equipo||[]).includes(activeFilters.equipo)) return false;
+    if(activeFilters.frontera && !(c.fronteras||[]).includes(activeFilters.frontera)) return false;
+    if(q){
+      const contactStr = (c.contactos||[]).map(x=>x.nombre+' '+x.email).join(' ');
+      const hay = [c.name,c.id,contactStr].join(' ').toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+let selectedCarrierId = null;
+function renderMarkers(){
+  markerLayer.clearLayers();
+  let list = filteredCarriers();
+  if(selectedCarrierId) list = list.filter(c=>c.id === selectedCarrierId);
+  list.forEach(c=>{
+    const color = opColor(c.operaciones);
+    (c.terminales||[]).forEach(term=>{
+      const coord = TERMINAL_COORDS[term];
+      if(!coord) return;
+      const [ja,jb] = hashJitter(c.id+term);
+      const m = L.circleMarker([coord[0]+ja, coord[1]+jb], { radius:6, color, weight:2, fillColor:color, fillOpacity:.5 });
+      m.bindPopup(popupHtml(c));
+      m.on('mouseover', ()=>m.openPopup());
+      m._carrierId = c.id;
+      markerLayer.addLayer(m);
+    });
+  });
+  document.getElementById('selectionBanner').style.display = selectedCarrierId ? 'flex' : 'none';
+  if(selectedCarrierId){
+    const sel = carriers.find(x=>x.id===selectedCarrierId);
+    document.getElementById('selectionLabel').textContent = 'Mostrando solo: ' + (sel ? sel.name : selectedCarrierId);
+  }
+}
+document.getElementById('selectionClear').addEventListener('click', ()=>{
+  selectedCarrierId = null;
+  renderMarkers();
+  renderList();
+});
+function renderLegend(){
+  document.getElementById('legend').innerHTML = `<div class="lt">Transportista</div>` +
+    OPERACIONES.map(op=>`<div class="row"><span class="dot" style="background:${OP_COLORS[op]}"></span>${op}</div>`).join("");
+}
+
+function updateStats(){
+  document.getElementById('statTotal').textContent = carriers.length;
+  document.getElementById('statMx').textContent = carriers.filter(c=>(c.operaciones||[]).includes('MX')).length;
+  document.getElementById('statUs').textContent = carriers.filter(c=>(c.operaciones||[]).includes('US')).length;
+  document.getElementById('statCrossdock').textContent = carriers.filter(c=>(c.operaciones||[]).includes('CROSSDOCK')).length;
+}
+
+function renderRanking(){
+  const counts = {}; ZONES.forEach(z=>counts[z.id]=0);
+  carriers.forEach(c=> [...c.cobertura_mx,...c.cobertura_us].forEach(zid=>{ if(counts[zid]!==undefined) counts[zid]++; }));
+  const entries = ZONES.map(z=>[z,counts[z.id]]).sort((a,b)=>b[1]-a[1]);
+  const max = Math.max(1,...entries.map(e=>e[1]));
+  document.getElementById('rankList').innerHTML = entries.map(([z,count])=>`
+    <div class="rankrow"><div class="rl"><span>${escapeHtml(z.label)}</span><b>${count}</b></div>
+    <div class="rbar"><i style="width:${(count/max*100).toFixed(0)}%"></i></div></div>`).join("");
+}
+
+/* ============ sidebar list ============ */
+function populateFilterSelects(){
+  const of = document.getElementById('operacionFilter');
+  OPERACIONES.forEach(o=>{ const opt=document.createElement('option'); opt.value=o; opt.textContent=o; of.appendChild(opt); });
+  const zf = document.getElementById('zoneFilter');
+  ZONES.forEach(z=>{ const opt=document.createElement('option'); opt.value=z.id; opt.textContent=`${z.label} (${z.id})`; zf.appendChild(opt); });
+  const tf = document.getElementById('terminalFilter');
+  TERMINALES_OPTS.forEach(t=>{ const opt=document.createElement('option'); opt.value=t; opt.textContent=t; tf.appendChild(opt); });
+  const ef = document.getElementById('equipoFilter');
+  EQUIPOS.forEach(eq=>{ const opt=document.createElement('option'); opt.value=eq; opt.textContent=eq; ef.appendChild(opt); });
+  const ff = document.getElementById('fronteraFilter');
+  FRONTERAS.forEach(fr=>{ const opt=document.createElement('option'); opt.value=fr; opt.textContent=fr; ff.appendChild(opt); });
+}
+
+function renderList(){
+  const list = filteredCarriers();
+  const container = document.getElementById('carrierList');
+  document.getElementById('emptyMsg').style.display = list.length? 'none':'block';
+  container.innerHTML = list.map(c=>{
+    const color = opColor(c.operaciones);
+    const tags = [...(c.cobertura_mx||[]),...(c.cobertura_us||[])].slice(0,6).map(zid=>ZONE_BY_ID[zid]?`<span class="zonetag">${ZONE_BY_ID[zid].label}</span>`:"").join("");
+    const carrierAssignment = [c.carrier_assignment, c.ownership].filter(Boolean).join(' · ');
+    return `<div class="card" data-id="${c.id}" style="border-left-color:${color}">
+      <div class="top"><span class="name">${escapeHtml(c.name)}</span><span class="tag" style="background:${color};color:${opTextColor(c.operaciones)}">L# ${escapeHtml(c.id)}</span></div>
+      <div class="loc">${escapeHtml((c.operaciones||[]).join(', '))} · ${escapeHtml((c.terminales||[]).slice(0,3).join(', '))}</div>
+      <div class="tags">${tags}</div>
+      <div class="meta"><span>${escapeHtml(carrierAssignment)}</span></div>
+    </div>`;
+  }).join("");
+  container.querySelectorAll('.card').forEach(card=>{
+    if(card.dataset.id === selectedCarrierId) card.classList.add('selected');
+    card.addEventListener('click', (e)=>{
+      const c = carriers.find(x=>x.id===card.dataset.id);
+      if(selectedCarrierId === c.id){
+        selectedCarrierId = null;
+      } else {
+        selectedCarrierId = c.id;
+        const coords = (c.terminales||[]).map(t=>TERMINAL_COORDS[t]).filter(Boolean);
+        if(coords.length === 1){ map.flyTo(coords[0], 6, {duration:.6}); }
+        else if(coords.length > 1){ map.flyToBounds(coords, {padding:[60,60], duration:.6}); }
+      }
+      renderMarkers();
+      renderList();
+    });
+    card.addEventListener('dblclick', ()=>{
+      const c = carriers.find(x=>x.id===card.dataset.id);
+      if(!c) return;
+      switchPage('Perfiles');
+      document.getElementById('profSearch').value = c.name;
+      renderProfilesPage(c.name);
+    });
+  });
+}
+
+function renderAll(){ renderList(); renderMarkers(); renderLegend(); updateStats(); renderRanking(); renderZonesPage(); renderProfilesPage(); }
+
+/* ============ multiselect component ============ */
+function buildMultiselect(container, options, {onChange, placeholder}={}){
+  let selected = [];
+  container.innerHTML = `<div class="msel-chips" tabindex="0"><input class="msel-input" placeholder="${placeholder||'Buscar...'}"></div><div class="msel-panel"></div>`;
+  const chipsBox = container.querySelector('.msel-chips');
+  const input = container.querySelector('.msel-input');
+  const panel = container.querySelector('.msel-panel');
+
+  function renderChips(){
+    chipsBox.querySelectorAll('.msel-chip').forEach(e=>e.remove());
+    selected.forEach(val=>{
+      const chip = document.createElement('div'); chip.className='msel-chip';
+      chip.innerHTML = `${escapeHtml(val)} <span>✕</span>`;
+      chip.querySelector('span').addEventListener('click', (e)=>{ e.stopPropagation(); selected=selected.filter(v=>v!==val); renderChips(); if(onChange) onChange(selected); });
+      chipsBox.insertBefore(chip, input);
+    });
+  }
+  function renderPanel(filter){
+    const f = (filter||'').toLowerCase();
+    const opts = options.filter(o=>o.toLowerCase().includes(f));
+    panel.innerHTML = opts.map(o=>`<label class="msel-opt"><span class="cb-wrap"><input type="checkbox" ${selected.includes(o)?'checked':''} data-val="${escapeHtml(o)}"></span><span class="opt-label">${escapeHtml(o)}</span></label>`).join("") || '<div class="msel-opt">Sin resultados</div>';
+    panel.querySelectorAll('.msel-opt input').forEach(cb=>{
+      cb.addEventListener('change', ()=>{
+        const val = cb.dataset.val;
+        if(cb.checked){ if(!selected.includes(val)) selected.push(val); } else { selected = selected.filter(v=>v!==val); }
+        renderChips(); if(onChange) onChange(selected);
+      });
+    });
+  }
+  chipsBox.addEventListener('click', ()=>{ input.focus(); panel.classList.add('open'); renderPanel(input.value); });
+  input.addEventListener('input', ()=>{ renderPanel(input.value); panel.classList.add('open'); });
+  document.addEventListener('click', (e)=>{ if(!container.contains(e.target)) panel.classList.remove('open'); });
+  renderChips(); renderPanel('');
+  return { get: ()=>selected, set: (vals)=>{ selected=[...vals]; renderChips(); renderPanel(input.value); } };
+}
+
+/* ============ Agregar form ============ */
+let formState = { fronteras:null, terminales:null, choferes:null,
+  cobMx:null, cobUs:null, noCobertura:null };
+let contactCount = 1;
+let equipoCount = 1;
+
+function buildAddForm(){
+  const el = document.getElementById('addForm');
+  el.innerHTML = `
+    <div class="field"><label>L# <span class="req">*</span></label><input id="f_lnum" placeholder="Ej. L246789"></div>
+    <div class="field"><label>Nombre / razón social <span class="req">*</span></label><input id="f_name" placeholder="Nombre del transportista"></div>
+
+    <div class="sectionlabel">Transportista *</div>
+    <div class="field"><select id="f_operacion"><option value="">Selecciona</option>${OPERACIONES.map(o=>`<option>${o}</option>`).join('')}</select></div>
+
+    <div class="sectionlabel">Equipo *</div>
+    <div id="equipoWrap"></div>
+    <button id="addEquipoBtn" type="button">+ Agregar equipo adicional</button>
+    <div id="tamanoPreview" style="font-size:11.5px;color:var(--text-dim);margin:8px 0 14px;">Tamaño: se calcula automáticamente</div>
+
+    <div class="sectionlabel">Contactos</div>
+    <div id="contactsWrap"></div>
+    <button id="addContactBtn" type="button">+ Agregar contacto adicional</button>
+
+    <div class="sectionlabel">Fronteras *</div>
+    <div class="field msel" id="msel_fronteras"></div>
+
+    <div class="sectionlabel">Terminales *</div>
+    <div class="field msel" id="msel_terminales"></div>
+
+    <div class="sectionlabel">Choferes *</div>
+    <div class="field msel" id="msel_choferes"></div>
+
+    <div class="sectionlabel">Cobertura MX (Zona 1–6)</div>
+    <div class="field msel" id="msel_cobmx"></div>
+
+    <div class="sectionlabel">Cobertura US (Zona 7–11)</div>
+    <div class="field msel" id="msel_cobus"></div>
+
+    <div class="sectionlabel">No tiene cobertura</div>
+    <div class="field msel" id="msel_nocob"></div>
+
+    <div class="sectionlabel">Integración</div>
+    <div class="field"><select id="f_integracion"><option value="">Selecciona</option><option>Sí</option><option>No</option></select></div>
+
+    <div class="sectionlabel">CTPAT</div>
+    <div class="field"><select id="f_ctpat"><option value="">Selecciona</option><option>SI</option><option>NO</option></select></div>
+
+    <div class="sectionlabel">OEA</div>
+    <div class="field"><select id="f_oea"><option value="">Selecciona</option><option>SI</option><option>NO</option></select></div>
+
+    <div class="sectionlabel">Hazmat</div>
+    <div class="field"><select id="f_hazmat"><option value="">Selecciona</option>${HAZMAT_OPTS.map(h=>`<option>${h}</option>`).join('')}</select></div>
+
+    <div class="sectionlabel">Bonded</div>
+    <div class="field"><select id="f_bonded"><option value="">Selecciona</option><option>Sí</option><option>No</option></select></div>
+
+    <div class="sectionlabel">Doubledecking</div>
+    <div class="field"><select id="f_doubledecking">
+      <option value="">Selecciona</option>
+      <option>Sí, con postes logísticos</option>
+      <option>Sí, con rieles logísticos</option>
+      <option>Sí con ambos</option>
+      <option>No</option>
+    </select></div>
+    <div id="ddUnidadesWrap" style="display:none;">
+      <div class="field"><label>Número de unidades</label><input id="f_dd_unidades" type="number" min="0"></div>
+    </div>
+
+    <div class="sectionlabel">Comentarios</div>
+    <div class="field"><textarea id="f_comentarios" placeholder="Notas adicionales"></textarea></div>
+
+    <div class="sectionlabel">Agregado por *</div>
+    <div class="fieldrow">
+      <div class="field"><label>Nombre</label><input id="f_agnombre"></div>
+      <div class="field"><label>Departamento</label><input id="f_agdepto"></div>
+    </div>
+
+    <div class="sectionlabel">Fecha de registro</div>
+    <div class="field"><input id="f_fecha" disabled></div>
+
+    <button id="submitBtn">Agregar transportista</button>
+    <div id="formMsg"></div>
+  `;
+  formState.fronteras = buildMultiselect(document.getElementById('msel_fronteras'), FRONTERAS, {placeholder:'Elige frontera(s)'});
+  formState.terminales = buildMultiselect(document.getElementById('msel_terminales'), TERMINALES_OPTS, {placeholder:'Elige terminal(es)'});
+  formState.choferes = buildMultiselect(document.getElementById('msel_choferes'), CHOFERES_OPTS, {placeholder:'Elige tipo(s)'});
+  formState.cobMx = buildMultiselect(document.getElementById('msel_cobmx'), ZONA_MX_OPTS.map(z=>`${z.id} · ${z.label}`), {placeholder:'Zonas MX'});
+  formState.cobUs = buildMultiselect(document.getElementById('msel_cobus'), ZONA_US_OPTS.map(z=>`${z.id} · ${z.label}`), {placeholder:'Zonas US'});
+  formState.noCobertura = buildMultiselect(document.getElementById('msel_nocob'), TERMINALES_OPTS, {placeholder:'Estados sin cobertura'});
+  contactCount = 1;
+  renderContactBlocks();
+  document.getElementById('addContactBtn').addEventListener('click', ()=>{
+    if(contactCount < 3){ contactCount++; renderContactBlocks(); }
+  });
+  equipoCount = 1;
+  renderEquipoBlocks();
+  document.getElementById('addEquipoBtn').addEventListener('click', ()=>{
+    if(equipoCount < EQUIPOS.length){ equipoCount++; renderEquipoBlocks(); }
+  });
+  document.getElementById('f_fecha').value = new Date().toLocaleDateString('es-MX', {year:'numeric', month:'2-digit', day:'2-digit'});
+  const updateTamanoPreview = ()=>{
+    const camiones = Array.from(document.querySelectorAll('.eq_camiones')).reduce((s,i)=>s+(Number(i.value)||0),0);
+    const cajas = Array.from(document.querySelectorAll('.eq_cajas')).reduce((s,i)=>s+(Number(i.value)||0),0);
+    const t = classifySize(camiones, cajas);
+    document.getElementById('tamanoPreview').textContent = t ? `Tamaño total: ${t} (${camiones} camiones, ${cajas} cajas)` : 'Tamaño: se calcula automáticamente';
+  };
+  document.getElementById('equipoWrap').addEventListener('input', (e)=>{
+    if(e.target.classList.contains('eq_camiones') || e.target.classList.contains('eq_cajas')) updateTamanoPreview();
+  });
+  window.updateTamanoPreview = updateTamanoPreview;
+  document.getElementById('f_doubledecking').addEventListener('change', (e)=>{
+    const isPositive = e.target.value.startsWith('Sí');
+    document.getElementById('ddUnidadesWrap').style.display = isPositive ? '' : 'none';
+    if(!isPositive) document.getElementById('f_dd_unidades').value = '';
+  });
+  document.getElementById('submitBtn').addEventListener('click', submitCarrier);
+}
+
+function tierFor(value, small, medium){
+  if(value <= small) return 0;
+  if(value <= medium) return 1;
+  return 2;
+}
+function classifySize(camiones, unidades){
+  if(!camiones && !unidades) return "";
+  const tierCamiones = tierFor(camiones, 20, 99);
+  const tierUnidades = tierFor(unidades, 50, 100);
+  const tier = Math.max(tierCamiones, tierUnidades);
+  return ["Pequeño","Mediano","Grande"][tier];
+}
+
+function renderContactBlocks(){
+  const wrap = document.getElementById('contactsWrap');
+  const existing = {};
+  wrap.querySelectorAll('.contactblock').forEach((b,i)=>{
+    existing[i] = {
+      nombre: b.querySelector('.c_nombre').value, telefono: b.querySelector('.c_tel').value,
+      posicion: b.querySelector('.c_pos').value, email: b.querySelector('.c_email').value,
+      para: b.querySelector('.c_para').value
+    };
+  });
+  let html = '';
+  for(let i=0;i<contactCount;i++){
+    const req = i===0 ? ' <span class="req">*</span>' : '';
+    const v = existing[i] || {nombre:'',telefono:'',posicion:'',email:'',para:''};
+    html += `<div class="contactblock">
+      <div class="field"><label>Contacto ${i+1}${req}</label><input class="c_nombre" value="${escapeHtml(v.nombre)}"></div>
+      <div class="fieldrow">
+        <div class="field"><label>Teléfono</label><input class="c_tel" value="${escapeHtml(v.telefono)}"></div>
+        <div class="field"><label>Posición</label><input class="c_pos" value="${escapeHtml(v.posicion)}"></div>
+      </div>
+      <div class="field"><label>Email</label><input class="c_email" value="${escapeHtml(v.email)}"></div>
+      <div class="field"><label>Contacto para</label><input class="c_para" placeholder="Ej. tráfico, facturación…" value="${escapeHtml(v.para)}"></div>
+    </div>`;
+  }
+  wrap.innerHTML = html;
+}
+
+function renderEquipoBlocks(){
+  const wrap = document.getElementById('equipoWrap');
+  const existing = [];
+  wrap.querySelectorAll('.equipoblock').forEach(b=>{
+    existing.push({
+      tipo: b.querySelector('.eq_select').value,
+      camiones: b.querySelector('.eq_camiones').value,
+      cajas: b.querySelector('.eq_cajas').value
+    });
+  });
+  let html = '';
+  for(let i=0;i<equipoCount;i++){
+    const req = i===0 ? ' <span class="req">*</span>' : '';
+    const v = existing[i] || {tipo:'',camiones:'',cajas:''};
+    html += `<div class="contactblock equipoblock">
+      <div class="field"><label>Equipo ${i+1}${req}</label>
+        <select class="eq_select"><option value="">Selecciona</option>${EQUIPOS.map(eq=>`<option ${eq===v.tipo?'selected':''}>${eq}</option>`).join('')}</select></div>
+      <div class="fieldrow">
+        <div class="field"><label>Camiones</label><input class="eq_camiones" type="number" min="0" value="${escapeHtml(v.camiones)}"></div>
+        <div class="field"><label>Cajas</label><input class="eq_cajas" type="number" min="0" value="${escapeHtml(v.cajas)}"></div>
+      </div>
+    </div>`;
+  }
+  wrap.innerHTML = html;
+  if(window.updateTamanoPreview) window.updateTamanoPreview();
+}
+
+async function submitCarrier(){
+  const lnum = document.getElementById('f_lnum').value.trim();
+  const name = document.getElementById('f_name').value.trim();
+  const operacionValue = document.getElementById('f_operacion').value;
+  const operaciones = operacionValue ? [operacionValue] : [];
+  const equipoBlocks = Array.from(document.querySelectorAll('.equipoblock')).map(b=>({
+    tipo: b.querySelector('.eq_select').value,
+    camiones: Number(b.querySelector('.eq_camiones').value) || 0,
+    cajas: Number(b.querySelector('.eq_cajas').value) || 0
+  })).filter(b=>b.tipo);
+  const equipo = equipoBlocks.map(b=>b.tipo);
+  const equipoDetalle = equipoBlocks.map(b=>`${b.tipo}, ${b.camiones} camiones, ${b.cajas} cajas`);
+  const camiones = equipoBlocks.reduce((s,b)=>s+b.camiones, 0);
+  const cajas = equipoBlocks.reduce((s,b)=>s+b.cajas, 0);
+  const tamano = classifySize(camiones, cajas);
+  const fronteras = formState.fronteras.get();
+  const terminales = formState.terminales.get();
+  const choferes = formState.choferes.get();
+  const cobMx = formState.cobMx.get().map(s=>s.split(' · ')[0]);
+  const cobUs = formState.cobUs.get().map(s=>s.split(' · ')[0]);
+  const noCobertura = formState.noCobertura.get();
+  const agnombre = document.getElementById('f_agnombre').value.trim();
+  const agdepto = document.getElementById('f_agdepto').value.trim();
+  const fechaRegistro = document.getElementById('f_fecha').value;
+
+  const contactBlocks = Array.from(document.querySelectorAll('#contactsWrap .contactblock')).map(b=>({
+    nombre: b.querySelector('.c_nombre').value.trim(), telefono: b.querySelector('.c_tel').value.trim(),
+    posicion: b.querySelector('.c_pos').value.trim(), email: b.querySelector('.c_email').value.trim(),
+    para: b.querySelector('.c_para').value.trim()
+  }));
+  const contactos = contactBlocks.filter(c=>c.nombre);
+
+  const missing = [];
+  if(!lnum) missing.push('L#');
+  if(!name) missing.push('Nombre');
+  if(!operaciones.length) missing.push('Transportista');
+  if(!equipo.length) missing.push('Equipo');
+  if(!contactBlocks[0] || !contactBlocks[0].nombre) missing.push('Contacto 1');
+  if(!fronteras.length) missing.push('Fronteras');
+  if(!terminales.length) missing.push('Terminales');
+  if(!choferes.length) missing.push('Choferes');
+  if(!cobMx.length && !cobUs.length) missing.push('Cobertura MX o US (al menos una)');
+  if(!agnombre || !agdepto) missing.push('Agregado por');
+
+  if(missing.length){
+    document.getElementById('formMsg').textContent = 'Faltan campos obligatorios: ' + missing.join(', ');
+    document.getElementById('formMsg').style.color = '#ff6b6b';
+    showToast('Faltan campos obligatorios: ' + missing.join(', '), 'error');
+    return;
+  }
+
+  const c = {
+    id: lnum, name, operaciones, equipo, contactos, fronteras, terminales, choferes,
+    cobertura_mx: cobMx, cobertura_us: cobUs, no_cobertura: noCobertura,
+    integracion: document.getElementById('f_integracion').value,
+    ctpat: document.getElementById('f_ctpat').value,
+    oea: document.getElementById('f_oea').value,
+    hazmat: document.getElementById('f_hazmat').value,
+    bonded: document.getElementById('f_bonded').value,
+    doubledecking: document.getElementById('f_doubledecking').value,
+    doubledecking_unidades: document.getElementById('f_dd_unidades').value || '',
+    comentarios: document.getElementById('f_comentarios').value.trim(),
+    agregado_por_nombre: agnombre, agregado_por_departamento: agdepto,
+    num_camiones: camiones, num_unidades: cajas, equipo_detalle: equipoDetalle, tamano, fecha_registro: fechaRegistro,
+    carrier_assignment: "", ownership: ""
+  };
+  document.getElementById('submitBtn').disabled = true;
+  document.getElementById('submitBtn').textContent = 'Guardando…';
+  try{
+    await addCarrierToExcel(c);
+    carriers.push(c);
+    document.getElementById('formMsg').style.color = 'var(--echo-green)';
+    document.getElementById('formMsg').textContent = `✓ ${name} agregado.`;
+    showToast(`✓ Transportista guardado con éxito`, 'success');
+    buildAddForm();
+    renderAll();
+  }catch(err){
+    console.error(err);
+    document.getElementById('formMsg').style.color = '#ff6b6b';
+    document.getElementById('formMsg').textContent = 'No se pudo guardar en el Excel. Intenta de nuevo.';
+    showToast('No se pudo guardar en el Excel. Intenta de nuevo.', 'error');
+    document.getElementById('submitBtn').disabled = false;
+    document.getElementById('submitBtn').textContent = 'Agregar transportista';
+  }
+}
+
+/* ============ Zonas page ============ */
+function zoneNum(z){ return parseInt(z.id.replace(/\D/g,''), 10); }
+function zoneCardsHtml(zones){
+  return `<div class="zonegrid">${zones.map(z=>`
+    <div class="zonecard">
+      <h3>${escapeHtml(z.label)}</h3>
+      <div class="zid">${escapeHtml(z.id)}</div>
+      <div class="members">${z.members.map(m=>`<span class="m">${escapeHtml(m)}</span>`).join('')}</div>
+    </div>`).join('')}</div>`;
+}
+function renderZonesPage(){
+  const mx = ZONES.filter(z=>zoneNum(z) <= 6);
+  const us = ZONES.filter(z=>zoneNum(z) >= 7 && zoneNum(z) <= 10);
+  const can = ZONES.filter(z=>zoneNum(z) === 11);
+  document.getElementById('zonesContent').innerHTML =
+    `<div class="zone-banner">Zonas MX</div>${zoneCardsHtml(mx)}` +
+    `<div class="zone-banner">Zonas US</div>${zoneCardsHtml(us)}` +
+    `<div class="zone-banner">Zona CAN</div>${zoneCardsHtml(can)}`;
+}
+
+/* ============ Perfiles page ============ */
+function renderProfilesPage(filter){
+  const f = (filter||'').trim().toLowerCase();
+  const list = carriers.filter(c=>{
+    if(!f) return true;
+    const contactStr = (c.contactos||[]).map(x=>x.nombre+' '+x.email).join(' ');
+    return [c.name,c.id,contactStr,(c.terminales||[]).join(' ')].join(' ').toLowerCase().includes(f);
+  });
+  document.getElementById('profilesList').innerHTML = list.map(c=>{
+    const color = opColor(c.operaciones);
+    const coverageText = [...(c.cobertura_mx||[]),...(c.cobertura_us||[])].map(zid=>ZONE_BY_ID[zid]?ZONE_BY_ID[zid].label:zid).join(', ');
+    const contactsText = (c.contactos||[]).map(ct=>{
+      const parts = [`${ct.nombre||''}${ct.posicion?` (${ct.posicion})`:''}`];
+      if(ct.telefono) parts.push(ct.telefono);
+      if(ct.email) parts.push(ct.email);
+      if(ct.para) parts.push(`Para: ${ct.para}`);
+      return parts.filter(Boolean).join(' · ');
+    }).join('<br>');
+    return `<div class="profcard">
+      <h3>${escapeHtml(c.name)}</h3>
+      <span class="ptag" style="background:${color};color:${opTextColor(c.operaciones)}">${escapeHtml((c.operaciones||[]).join(', '))}${c.carrier_assignment?` — ${escapeHtml(c.carrier_assignment)}`:''}${c.ownership?` — ${escapeHtml(c.ownership)}`:''}</span>
+      <p><b>Bonded:</b> ${escapeHtml(c.bonded||'-')}</p>
+      ${c.doubledecking ? `<p><b>Doubledecking:</b> ${escapeHtml(c.doubledecking)}${c.doubledecking_unidades?` (${escapeHtml(c.doubledecking_unidades)} unidades)`:''}</p>` : ''}
+      <p><b>L#:</b> ${escapeHtml(c.id)}</p>
+      <p><b>Equipo:</b> ${escapeHtml((c.equipo||[]).join(', '))}</p>
+      ${(c.num_camiones || c.num_unidades) ? `<p>${c.num_camiones?`<b>Camiones:</b> ${escapeHtml(c.num_camiones)}`:''}${(c.num_camiones && c.num_unidades)?' &nbsp; ':''}${c.num_unidades?`<b>Cajas:</b> ${escapeHtml(c.num_unidades)}`:''} ${c.tamano?`(${escapeHtml(c.tamano)})`:''}</p>` : ''}
+      <p><b>Contactos:</b><br>${contactsText || '-'}</p>
+      <p><b>Terminales:</b> ${escapeHtml((c.terminales||[]).join(', '))}</p>
+      <p><b>Cobertura:</b> ${escapeHtml(coverageText || '-')}</p>
+      <p><b>Hazmat:</b> ${escapeHtml(c.hazmat||'-')} · <b>CTPAT:</b> ${escapeHtml(c.ctpat||'-')} · <b>OEA:</b> ${escapeHtml(c.oea||'-')}</p>
+      ${c.comentarios ? `<p><b>Comentarios:</b> ${escapeHtml(c.comentarios)}</p>` : ''}
+    </div>`;
+  }).join('') || '<div style="color:var(--text-dim);font-size:13px;">Sin resultados.</div>';
+}
+document.getElementById('profSearch').addEventListener('input', (e)=>renderProfilesPage(e.target.value));
+
+/* ============ page nav ============ */
+function switchPage(which){
+  ['Mapa','Zonas','Perfiles'].forEach(p=>{
+    document.getElementById('nav'+p).classList.toggle('active', p===which);
+    document.getElementById('page'+p).classList.toggle('active', p===which);
+  });
+  if(which==='Mapa') setTimeout(()=>map.invalidateSize(), 50);
+}
+document.getElementById('navMapa').addEventListener('click', ()=>switchPage('Mapa'));
+document.getElementById('navZonas').addEventListener('click', ()=>switchPage('Zonas'));
+document.getElementById('navPerfiles').addEventListener('click', ()=>switchPage('Perfiles'));
+
+/* ============ sidebar tabs ============ */
+function switchTab(which){
+  ['List','Add'].forEach(t=>{
+    document.getElementById('tab'+t+'Btn').classList.toggle('active', t===which);
+    document.getElementById('tab'+t).classList.toggle('active', t===which);
+  });
+}
+document.getElementById('tabListBtn').addEventListener('click', ()=>switchTab('List'));
+document.getElementById('tabAddBtn').addEventListener('click', ()=>switchTab('Add'));
+
+document.getElementById('searchbox').addEventListener('input', e=>{ activeFilters.query=e.target.value; renderList(); renderMarkers(); });
+document.getElementById('operacionFilter').addEventListener('change', e=>{ activeFilters.operacion=e.target.value; renderList(); renderMarkers(); });
+document.getElementById('zoneFilter').addEventListener('change', e=>{ activeFilters.zone=e.target.value; renderList(); renderMarkers(); renderRanking(); });
+document.getElementById('hazmatFilter').addEventListener('change', e=>{ activeFilters.hazmat=e.target.value; renderList(); renderMarkers(); });
+document.getElementById('terminalFilter').addEventListener('change', e=>{ activeFilters.terminal=e.target.value; renderList(); renderMarkers(); });
+document.getElementById('equipoFilter').addEventListener('change', e=>{ activeFilters.equipo=e.target.value; renderList(); renderMarkers(); });
+document.getElementById('fronteraFilter').addEventListener('change', e=>{ activeFilters.frontera=e.target.value; renderList(); renderMarkers(); });
+
+document.getElementById('rankToggle').addEventListener('click', ()=>{ document.getElementById('rankPanel').style.display='block'; document.getElementById('rankToggle').style.display='none'; renderRanking(); });
+document.getElementById('rankClose').addEventListener('click', ()=>{ document.getElementById('rankPanel').style.display='none'; document.getElementById('rankToggle').style.display='block'; });
+
+/* ============ Microsoft login + Excel via Graph ============ */
+function setSyncStatus(state, label){
+  document.getElementById('syncDot').className = state;
+  document.getElementById('syncLabel').textContent = label;
+}
+
+function encodeShareUrl(url){
+  const b64 = btoa(unescape(encodeURIComponent(url))).replace(/=+$/,'').replace(/\//g,'_').replace(/\+/g,'-');
+  return "u!" + b64;
+}
+
+async function getAccessToken(){
+  const req = { scopes: GRAPH_SCOPES, account: graphAccount };
+  try{
+    const res = await msalInstance.acquireTokenSilent(req);
+    return res.accessToken;
+  }catch(e){
+    const res = await msalInstance.acquireTokenPopup(req);
+    graphAccount = res.account;
+    return res.accessToken;
+  }
+}
+
+async function graphFetch(url, options={}){
+  const token = await getAccessToken();
+  const res = await fetch(url, {
+    ...options,
+    headers: { ...(options.headers||{}), Authorization: `Bearer ${token}`, 'Content-Type':'application/json' }
+  });
+  if(!res.ok){
+    const text = await res.text().catch(()=>'');
+    throw new Error(`Graph ${res.status}: ${text}`);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+async function resolveExcelFile(){
+  const shareId = encodeShareUrl(EXCEL_SHARE_LINK);
+  const item = await graphFetch(`https://graph.microsoft.com/v1.0/shares/${shareId}/driveItem?$select=id,parentReference`);
+  excelDriveId = item.parentReference.driveId;
+  excelItemId = item.id;
+}
+
+async function loadExcelColumns(){
+  const data = await graphFetch(`https://graph.microsoft.com/v1.0/drives/${excelDriveId}/items/${excelItemId}/workbook/tables('${EXCEL_TABLE_NAME}')/columns?$select=name,index`);
+  excelColumns = {};
+  data.value.forEach(c=>{ excelColumns[c.name] = c.index; });
+}
+
+function splitList(v){ return String(v||"").split(";").map(x=>x.trim()).filter(Boolean); }
+function oneContactSplitClient(cellText){
+  if(!cellText) return null;
+  const [nombre,telefono,posicion,email,para] = String(cellText).split("|").map(v=>(v||"").trim());
+  if(!nombre) return null;
+  return {nombre:nombre||"", telefono:telefono||"", posicion:posicion||"", email:email||"", para:para||""};
+}
+function oneContactJoinClient(c){
+  if(!c || !c.nombre) return "";
+  return `${c.nombre||''} | ${c.telefono||''} | ${c.posicion||''} | ${c.email||''} | ${c.para||''}`;
+}
+function contactsFromCells(row){
+  const out = [];
+  [row["Contacto_1"], row["Contacto_2"], row["Contacto_3"]].forEach(cell=>{
+    const c = oneContactSplitClient(cell);
+    if(c) out.push(c);
+  });
+  return out;
+}
+
+async function syncFromExcel(){
+  setSyncStatus("", "Sincronizando…");
+  try{
+    if(!excelDriveId) await resolveExcelFile();
+    if(!excelColumns) await loadExcelColumns();
+    const data = await graphFetch(`https://graph.microsoft.com/v1.0/drives/${excelDriveId}/items/${excelItemId}/workbook/tables('${EXCEL_TABLE_NAME}')/rows?$select=values`);
+    const colNames = Object.keys(excelColumns);
+    const rows = (data.value||[]).map(r=>{
+      const vals = r.values[0];
+      const row = {};
+      colNames.forEach(name=>{ row[name] = vals[excelColumns[name]]; });
+      return row;
+    });
+    carriers = rows.filter(row=>row["L#"]).map(row=>({
+      id: String(row["L#"]||""), name: row["Nombre"]||"",
+      carrier_assignment: row["Carrier Assignment"]||"", ownership: row["Ownership"]||"",
+      operaciones: splitList(row["Transportista"]), equipo: splitList(row["Equipo"]),
+      equipo_detalle: splitList(row["Equipo_Detalle"]), contactos: contactsFromCells(row),
+      fronteras: splitList(row["Fronteras"]), terminales: splitList(row["Terminales"]),
+      choferes: splitList(row["Choferes"]),
+      num_unidades: Number(row["Número de cajas"])||0, num_camiones: Number(row["Número de camiones"])||0,
+      tamano: row["Tamaño"]||"",
+      cobertura_mx: splitList(row["Cobertura_MX"]), cobertura_us: splitList(row["Cobertura_US"]),
+      no_cobertura: splitList(row["No_Cobertura"]),
+      integracion: row["Integracion"]||"", ctpat: row["CTPAT"]||"", oea: row["OEA"]||"", hazmat: row["Hazmat"]||"",
+      bonded: row["Bonded"]||"", doubledecking: row["Double decking"]||"",
+      doubledecking_unidades: row["Doubledecking_Unidade"]||"",
+      comentarios: row["Comentarios"]||"",
+      agregado_por_nombre: row["Agregado_Nombre"]||"", agregado_por_departamento: row["Agregado_Departamento"]||"",
+      fecha_registro: row["Fecha_Registro"]||"",
+    }));
+    setSyncStatus("on", "Conectado a Microsoft 365");
+    renderAll();
+  }catch(err){
+    console.error(err);
+    setSyncStatus("err", "Error de sincronización");
+    showToast("No se pudo sincronizar con el Excel.", "error");
+  }
+}
+
+async function addCarrierToExcel(c){
+  if(!excelDriveId) await resolveExcelFile();
+  if(!excelColumns) await loadExcelColumns();
+  const rowMap = {
+    "L#": c.id, "Nombre": c.name, "Carrier Assignment": "", "Ownership": "",
+    "Transportista": (c.operaciones||[]).join("; "), "Equipo": (c.equipo||[]).join("; "),
+    "Equipo_Detalle": (c.equipo_detalle||[]).join("; "),
+    "Contacto_1": oneContactJoinClient((c.contactos||[])[0]),
+    "Contacto_2": oneContactJoinClient((c.contactos||[])[1]),
+    "Contacto_3": oneContactJoinClient((c.contactos||[])[2]),
+    "Fronteras": (c.fronteras||[]).join("; "), "Terminales": (c.terminales||[]).join("; "),
+    "Choferes": (c.choferes||[]).join("; "),
+    "Número de cajas": c.num_unidades||0, "Número de camiones": c.num_camiones||0, "Tamaño": c.tamano||"",
+    "Cobertura_MX": (c.cobertura_mx||[]).join("; "), "Cobertura_US": (c.cobertura_us||[]).join("; "),
+    "No_Cobertura": (c.no_cobertura||[]).join("; "),
+    "Integracion": c.integracion||"", "CTPAT": c.ctpat||"", "OEA": c.oea||"", "Hazmat": c.hazmat||"",
+    "Bonded": c.bonded||"", "Double decking": c.doubledecking||"",
+    "Doubledecking_Unidade": c.doubledecking_unidades||"",
+    "Comentarios": c.comentarios||"", "Agregado_Nombre": c.agregado_por_nombre||"",
+    "Agregado_Departamento": c.agregado_por_departamento||"", "Fecha_Registro": c.fecha_registro||""
+  };
+  const colNames = Object.keys(excelColumns).sort((a,b)=>excelColumns[a]-excelColumns[b]);
+  const values = colNames.map(name=> rowMap[name] !== undefined ? rowMap[name] : "");
+  await graphFetch(`https://graph.microsoft.com/v1.0/drives/${excelDriveId}/items/${excelItemId}/workbook/tables('${EXCEL_TABLE_NAME}')/rows`, {
+    method: 'POST',
+    body: JSON.stringify({ values: [values] })
+  });
+}
+
+document.getElementById('msLoginBtn').addEventListener('click', async ()=>{
+  document.getElementById('loginMsg').textContent = '';
+  try{
+    const res = await msalInstance.loginPopup({ scopes: GRAPH_SCOPES });
+    graphAccount = res.account;
+    document.getElementById('loginGateOverlay').classList.remove('show');
+    await syncFromExcel();
+  }catch(e){
+    document.getElementById('loginMsg').textContent = 'No se pudo iniciar sesión: ' + (e.errorMessage || e.message || e);
+  }
+});
+
+/* ============ init ============ */
+async function init(){
+  populateFilterSelects();
+  buildAddForm();
+  renderAll();
+  try{ await msalInstance.handleRedirectPromise(); }catch(e){}
+  const accounts = msalInstance.getAllAccounts();
+  if(accounts.length > 0){
+    graphAccount = accounts[0];
+    document.getElementById('loginGateOverlay').classList.remove('show');
+    await syncFromExcel();
+  } else {
+    setSyncStatus("", "Sin iniciar sesión");
+  }
+}
+init();
+</script>
+</body>
+</html>
