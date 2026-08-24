@@ -1096,6 +1096,7 @@ async function addCarrierToExcel(c){
 document.getElementById('msLoginBtn').addEventListener('click', async ()=>{
   document.getElementById('loginMsg').textContent = '';
   try{
+    await msalInstance.initialize();
     const res = await msalInstance.loginPopup({ scopes: GRAPH_SCOPES });
     graphAccount = res.account;
     document.getElementById('loginGateOverlay').classList.remove('show');
@@ -1110,6 +1111,7 @@ async function init(){
   populateFilterSelects();
   buildAddForm();
   renderAll();
+  await msalInstance.initialize();
   try{ await msalInstance.handleRedirectPromise(); }catch(e){}
   const accounts = msalInstance.getAllAccounts();
   if(accounts.length > 0){
