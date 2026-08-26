@@ -359,7 +359,7 @@ const MSAL_CONFIG = {
   },
   cache: { cacheLocation: "sessionStorage", storeAuthStateInCookie: false }
 };
-const GRAPH_SCOPES = ["Files.ReadWrite"];
+const GRAPH_SCOPES = ["Files.ReadWrite.All"];
 const EXCEL_TABLE_NAME = "carriers";
 const msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
 let graphAccount = null;
@@ -1073,7 +1073,6 @@ async function syncFromExcel(){
       fecha_registro: row["Fecha_Registro"]||"",
     }));
     setSyncStatus("on", "Conectado a Microsoft 365");
-    console.log("DEBUG excelDriveId:", excelDriveId, "| excelItemId:", excelItemId);
     renderAll();
   }catch(err){
     console.error(err);
