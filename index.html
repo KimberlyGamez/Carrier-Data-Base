@@ -360,7 +360,6 @@ const MSAL_CONFIG = {
   cache: { cacheLocation: "sessionStorage", storeAuthStateInCookie: false }
 };
 const GRAPH_SCOPES = ["Files.ReadWrite"];
-const EXCEL_SHARE_LINK = "https://echogl-my.sharepoint.com/:x:/g/personal/alvaro_olguin_echo_com/IQBgliFQAV6TSa17DbE1VOKKATQuEeblXqqcqFNULvKl4iQ?e=bX9kxB";
 const EXCEL_TABLE_NAME = "carriers";
 const msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
 let graphAccount = null;
@@ -382,13 +381,9 @@ function opColor(ops){ return OP_COLORS[(ops&&ops[0])||''] || "#ffb347"; }
 /* ============ map ============ */
 const map = L.map('map', { zoomControl:false, worldCopyJump:false }).setView([22.5, -100.5], 6);
 L.control.zoom({ position:'bottomright' }).addTo(map);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png', {
-  attribution:'&copy; OpenStreetMap &copy; CARTO', maxZoom: 18, minZoom: 3
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution:'&copy; OpenStreetMap contributors', maxZoom: 19, minZoom: 3
 }).addTo(map);
-const labelsLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
-  attribution:'&copy; OpenStreetMap &copy; CARTO', maxZoom: 18, minZoom: 3
-});
-const LABEL_MIN_ZOOM = 8;
 const NON_STATE_TERMINALS = ["ALTAMIRA","NUEVO LAREDO","LAREDO","MONTERREY","DALLAS","TOLUCA","EAGLE PASS"];
 function titleCase(s){ return s.toLowerCase().replace(/\b\w/g, ch=>ch.toUpperCase()); }
 const stateLabelsLayer = L.layerGroup();
@@ -398,17 +393,6 @@ Object.entries(TERMINAL_COORDS).forEach(([name, coord])=>{
   L.marker(coord, { icon, interactive:false, keyboard:false }).addTo(stateLabelsLayer);
 });
 stateLabelsLayer.addTo(map);
-function updateLabelsLayer(){
-  if(map.getZoom() >= LABEL_MIN_ZOOM){
-    if(!map.hasLayer(labelsLayer)) labelsLayer.addTo(map);
-    if(map.hasLayer(stateLabelsLayer)) map.removeLayer(stateLabelsLayer);
-  } else {
-    if(map.hasLayer(labelsLayer)) map.removeLayer(labelsLayer);
-    if(!map.hasLayer(stateLabelsLayer)) stateLabelsLayer.addTo(map);
-  }
-}
-map.on('zoomend', updateLabelsLayer);
-updateLabelsLayer();
 let markerLayer = L.layerGroup().addTo(map);
 
 function hashJitter(seed){
@@ -961,11 +945,6 @@ function setSyncStatus(state, label){
   document.getElementById('syncLabel').textContent = label;
 }
 
-function encodeShareUrl(url){
-  const b64 = btoa(unescape(encodeURIComponent(url))).replace(/=+$/,'').replace(/\//g,'_').replace(/\+/g,'-');
-  return "u!" + b64;
-}
-
 async function getAccessToken(){
   const req = { scopes: GRAPH_SCOPES, account: graphAccount };
   try{
@@ -992,10 +971,11 @@ async function graphFetch(url, options={}){
 }
 
 async function resolveExcelFile(){
-  const shareId = encodeShareUrl(EXCEL_SHARE_LINK);
-  const item = await graphFetch(`https://graph.microsoft.com/v1.0/shares/${shareId}/driveItem?$select=id,parentReference`);
-  excelDriveId = item.parentReference.driveId;
-  excelItemId = item.id;
+  const data = await graphFetch(`https://graph.microsoft.com/v1.0/me/drive/root/search(q='Carrier data base.xlsx')?$select=id,name,parentReference`);
+  const match = (data.value||[]).find(f => f.name.toLowerCase() === "carrier data base.xlsx") || (data.value||[])[0];
+  if(!match) throw new Error("No se encontró el archivo Excel en tu OneDrive");
+  excelDriveId = match.parentReference.driveId;
+  excelItemId = match.id;
 }
 
 async function loadExcelColumns(){
