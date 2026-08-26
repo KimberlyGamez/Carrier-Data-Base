@@ -1061,6 +1061,7 @@ async function syncFromExcel(){
       fecha_registro: row["Fecha_Registro"]||"",
     }));
     setSyncStatus("on", "Conectado a Microsoft 365");
+    console.log("DEBUG excelDriveId:", excelDriveId, "| excelItemId:", excelItemId);
     renderAll();
   }catch(err){
     console.error(err);
