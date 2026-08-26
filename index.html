@@ -970,12 +970,37 @@ async function graphFetch(url, options={}){
   return res.status === 204 ? null : res.json();
 }
 
+function encodeShareUrl(url){
+  const b64 = btoa(unescape(encodeURIComponent(url))).replace(/=+$/,'').replace(/\//g,'_').replace(/\+/g,'-');
+  return "u!" + b64;
+}
+const EXCEL_SHARE_LINK = "https://echogl-my.sharepoint.com/:x:/g/personal/kimberly_gamez_echo_com/IQBx9mM0N6x3S5vCbpBqxem9AY-nsQyn7eRVPcC-xAtGuuI?e=KsMakg";
+
 async function resolveExcelFile(){
-  const data = await graphFetch(`https://graph.microsoft.com/v1.0/me/drive/root/search(q='Carrier data base.xlsx')?$select=id,name,parentReference`);
-  const match = (data.value||[]).find(f => f.name.toLowerCase() === "carrier data base.xlsx") || (data.value||[])[0];
-  if(!match) throw new Error("No se encontró el archivo Excel en tu OneDrive");
-  excelDriveId = match.parentReference.driveId;
-  excelItemId = match.id;
+  const target = "carrier data base.xlsx";
+  // 1) Try the signed-in user's own OneDrive first (works when they own the file)
+  try{
+    const own = await graphFetch(`https://graph.microsoft.com/v1.0/me/drive/root/search(q='Carrier data base.xlsx')?$select=id,name,parentReference`);
+    const match = (own.value||[]).find(f => f.name.toLowerCase() === target);
+    if(match){ excelDriveId = match.parentReference.driveId; excelItemId = match.id; return; }
+  }catch(e){ /* fall through */ }
+
+  // 2) Otherwise, look in "Shared with me" (works for teammates the file was shared with)
+  try{
+    const shared = await graphFetch(`https://graph.microsoft.com/v1.0/me/drive/sharedWithMe?$select=name,remoteItem`);
+    const sharedMatch = (shared.value||[]).find(f => (f.name||"").toLowerCase() === target);
+    if(sharedMatch && sharedMatch.remoteItem){
+      excelDriveId = sharedMatch.remoteItem.parentReference.driveId;
+      excelItemId = sharedMatch.remoteItem.id;
+      return;
+    }
+  }catch(e){ /* fall through */ }
+
+  // 3) Last resort: resolve directly via the org-wide sharing link
+  const shareId = encodeShareUrl(EXCEL_SHARE_LINK);
+  const item = await graphFetch(`https://graph.microsoft.com/v1.0/shares/${shareId}/driveItem?$select=id,parentReference`);
+  excelDriveId = item.parentReference.driveId;
+  excelItemId = item.id;
 }
 
 async function loadExcelColumns(){
