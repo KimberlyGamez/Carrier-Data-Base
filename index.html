@@ -976,7 +976,19 @@ function encodeShareUrl(url){
 }
 const EXCEL_SHARE_LINK = "https://echogl-my.sharepoint.com/:x:/g/personal/kimberly_gamez_echo_com/IQBx9mM0N6x3S5vCbpBqxem9AY-nsQyn7eRVPcC-xAtGuuI?e=KsMakg";
 
+const KNOWN_DRIVE_ID = "b!OZGomocybEqnOEKmVkg4OFgzOSoJdshPjdGv7XWG3p8_SkZ-FifJS50pH0Oe6K4U";
+const KNOWN_ITEM_ID = "01RHGWXV3R6ZRTIN5MO5FZXQTOSBVML2N5";
+
 async function resolveExcelFile(){
+  // 0) Try the known, direct reference first (fastest, and tests whether direct
+  //    drive/item access works even when search/shares endpoints get denied)
+  try{
+    await graphFetch(`https://graph.microsoft.com/v1.0/drives/${KNOWN_DRIVE_ID}/items/${KNOWN_ITEM_ID}?$select=id`);
+    excelDriveId = KNOWN_DRIVE_ID;
+    excelItemId = KNOWN_ITEM_ID;
+    return;
+  }catch(e){ /* fall through */ }
+
   const target = "carrier data base.xlsx";
   // 1) Try the signed-in user's own OneDrive first (works when they own the file)
   try{
