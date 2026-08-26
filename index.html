@@ -381,8 +381,8 @@ function opColor(ops){ return OP_COLORS[(ops&&ops[0])||''] || "#ffb347"; }
 /* ============ map ============ */
 const map = L.map('map', { zoomControl:false, worldCopyJump:false }).setView([22.5, -100.5], 6);
 L.control.zoom({ position:'bottomright' }).addTo(map);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution:'&copy; OpenStreetMap contributors', maxZoom: 19, minZoom: 3
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+  attribution:'&copy; Esri', maxZoom: 16, minZoom: 3
 }).addTo(map);
 const NON_STATE_TERMINALS = ["ALTAMIRA","NUEVO LAREDO","LAREDO","MONTERREY","DALLAS","TOLUCA","EAGLE PASS"];
 function titleCase(s){ return s.toLowerCase().replace(/\b\w/g, ch=>ch.toUpperCase()); }
